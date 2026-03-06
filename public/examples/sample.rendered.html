@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>2026년 3월 운영 보고서</title>
+<style>body { margin:0; padding:24px; background:#edf2f9; font-family: Inter, Pretendard, 'Noto Sans KR', system-ui, sans-serif; }
+.studio-document {
+  --doc-text: #1e293b;
+  --doc-muted: #5b677c;
+  --doc-line: rgba(191, 203, 222, 0.9);
+  --doc-line-soft: rgba(202, 212, 228, 0.75);
+  --doc-bg: #ffffff;
+  --doc-bg-soft: #f5f8fd;
+  --doc-bg-strong: #eef3fb;
+  --doc-accent: #4f74ff;
+  --doc-accent-soft: rgba(79, 116, 255, 0.12);
+  color: var(--doc-text);
+}
+
+.studio-document.theme-default {
+  --doc-bg-soft: #f7f8fb;
+  --doc-bg-strong: #f0f2f7;
+  --doc-accent: #5e6ad2;
+  --doc-accent-soft: rgba(94, 106, 210, 0.12);
+}
+
+.studio-document.theme-slate {
+  --doc-text: #e5edf6;
+  --doc-muted: #9db0c8;
+  --doc-line: rgba(59, 75, 102, 0.9);
+  --doc-line-soft: rgba(52, 67, 90, 0.75);
+  --doc-bg: #111927;
+  --doc-bg-soft: #182336;
+  --doc-bg-strong: #0f1827;
+  --doc-accent: #8cb4ff;
+  --doc-accent-soft: rgba(140, 180, 255, 0.12);
+}
+
+
+.studio-document a {
+  color: var(--doc-accent);
+}
+
+.studio-document code {
+  padding: 0.14em 0.36em;
+  border-radius: 8px;
+  background: var(--doc-bg-soft);
+  font-size: 0.92em;
+}
+
+.md-section.is-selected {
+  outline: 2px solid rgba(79, 116, 255, 0.28);
+  outline-offset: 0;
+}
+
+.document-shell {
+  max-width: 980px;
+  margin: 0 auto;
+  display: grid;
+  gap: 20px;
+}
+
+.document-intro,
+.md-toc,
+.md-section {
+  border-radius: 22px;
+}
+
+.document-intro,
+.md-toc,
+.md-section,
+.section-card,
+.md-table-shell,
+.md-code,
+.md-figure,
+.md-callout {
+  background: var(--doc-bg);
+}
+
+.document-intro,
+.md-toc,
+.md-section {
+  border: 1px solid var(--doc-line-soft);
+}
+
+.document-intro {
+  padding: 22px 24px;
+}
+
+.md-toc {
+  padding: 18px 22px;
+}
+
+.toc-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--doc-accent);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.md-toc ol {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+}
+
+.md-toc li {
+  color: var(--doc-muted);
+}
+
+.md-toc a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.md-toc a:hover {
+  color: var(--doc-accent);
+}
+
+.toc-depth-2 {
+  margin-left: 14px;
+}
+
+.toc-depth-3,
+.toc-depth-4,
+.toc-depth-5,
+.toc-depth-6 {
+  margin-left: 28px;
+}
+
+.md-section {
+  padding: 22px 24px;
+}
+
+.section-heading {
+  margin: 0 0 16px;
+  line-height: 1.25;
+  letter-spacing: -0.03em;
+}
+
+.section-heading.level-1 {
+  font-size: 40px;
+}
+
+.section-heading.level-2 {
+  font-size: 30px;
+}
+
+.section-heading.level-3 {
+  font-size: 22px;
+}
+
+.section-heading.level-4,
+.section-heading.level-5,
+.section-heading.level-6 {
+  font-size: 18px;
+}
+
+.md-paragraph,
+.md-list,
+.md-blockquote,
+.md-callout,
+.md-code,
+.md-figure,
+.md-table-shell {
+  margin: 14px 0 0;
+}
+
+.md-paragraph {
+  line-height: 1.85;
+  font-size: 17px;
+}
+
+.md-paragraph:first-child,
+.md-list:first-child,
+.md-blockquote:first-child,
+.md-callout:first-child,
+.md-code:first-child,
+.md-figure:first-child,
+.md-table-shell:first-child {
+  margin-top: 0;
+}
+
+.md-paragraph.is-lead {
+  font-size: 20px;
+  color: var(--doc-muted);
+}
+
+.md-paragraph.is-center {
+  text-align: center;
+}
+
+.md-paragraph.is-muted {
+  color: var(--doc-muted);
+}
+
+.md-list {
+  padding-left: 22px;
+  line-height: 1.8;
+}
+
+.md-list li + li {
+  margin-top: 6px;
+}
+
+.md-blockquote {
+  padding: 12px 16px;
+  border-left: 4px solid var(--doc-accent);
+  background: var(--doc-bg-soft);
+  color: var(--doc-muted);
+  border-radius: 14px;
+}
+
+.md-blockquote .md-paragraph {
+  margin-top: 0;
+}
+
+.md-callout {
+  padding: 16px 18px;
+  border: 1px solid var(--doc-line-soft);
+  border-radius: 16px;
+}
+
+.md-callout.type-info {
+  background: #eef6ff;
+}
+
+.md-callout.type-success {
+  background: #edf8f2;
+}
+
+.md-callout.type-warning {
+  background: #fff8eb;
+}
+
+.md-callout.type-danger {
+  background: #fff1f2;
+}
+
+.studio-document.theme-slate .md-callout.type-info {
+  background: rgba(69, 99, 160, 0.18);
+}
+
+.studio-document.theme-slate .md-callout.type-success {
+  background: rgba(60, 126, 94, 0.18);
+}
+
+.studio-document.theme-slate .md-callout.type-warning {
+  background: rgba(169, 127, 49, 0.18);
+}
+
+.studio-document.theme-slate .md-callout.type-danger {
+  background: rgba(161, 63, 82, 0.18);
+}
+
+.callout-title {
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.callout-body .md-paragraph:last-child,
+.callout-body .md-list:last-child {
+  margin-bottom: 0;
+}
+
+.md-code {
+  border: 1px solid var(--doc-line-soft);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--doc-line-soft);
+  background: var(--doc-bg-soft);
+  color: var(--doc-muted);
+  font-size: 12px;
+}
+
+.code-title {
+  font-weight: 700;
+}
+
+.md-code pre {
+  margin: 0;
+  padding: 16px 18px;
+  overflow: auto;
+  background: var(--doc-bg-strong);
+  color: inherit;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.md-figure {
+  width: min(100%, var(--figure-width, 100%));
+  margin-left: auto;
+  margin-right: auto;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid var(--doc-line-soft);
+}
+
+.md-figure.align-left {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.md-figure.align-right {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.md-figure img {
+  width: 100%;
+  display: block;
+  background: var(--doc-bg-soft);
+}
+
+.md-figure figcaption {
+  padding: 12px 14px;
+  background: var(--doc-bg-soft);
+  color: var(--doc-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.md-table-shell {
+  border: 1px solid var(--doc-line-soft);
+  border-radius: 18px;
+  overflow: auto;
+}
+
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 360px;
+  background: var(--doc-bg);
+}
+
+.md-table caption {
+  caption-side: top;
+  text-align: left;
+  padding: 14px 16px 0;
+  color: var(--doc-muted);
+  font-size: 14px;
+}
+
+.md-table th,
+.md-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--doc-line-soft);
+  text-align: left;
+  vertical-align: top;
+}
+
+.md-table th {
+  background: var(--doc-bg-soft);
+  font-size: 14px;
+}
+
+.md-table td {
+  font-size: 15px;
+}
+
+.md-table .align-right {
+  text-align: right;
+}
+
+.md-table .align-center {
+  text-align: center;
+}
+
+.md-table.zebra tbody tr:nth-child(odd) {
+  background: var(--doc-bg-soft);
+}
+
+.md-table.compact th,
+.md-table.compact td {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.md-table.bordered th,
+.md-table.bordered td {
+  border-right: 1px solid var(--doc-line-soft);
+}
+
+.md-table.bordered th:last-child,
+.md-table.bordered td:last-child {
+  border-right: 0;
+}
+
+.md-table .is-emphasis {
+  background: var(--doc-accent-soft);
+  font-weight: 700;
+}
+
+.template-cover {
+  padding: 30px 30px 26px;
+}
+
+.cover-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.cover-eyebrow {
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--doc-accent-soft);
+  color: var(--doc-accent);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.template-cover .section-heading.level-1 {
+  font-size: clamp(36px, 5vw, 56px);
+  margin-bottom: 0;
+}
+
+.cover-body {
+  display: grid;
+  gap: 14px;
+}
+
+.template-two-column .two-column-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.template-two-column .column {
+  display: grid;
+  gap: 16px;
+}
+
+.template-two-column .column > .md-section {
+  margin: 0;
+  background: var(--doc-bg-soft);
+}
+
+.section-card {
+  padding: 22px;
+  border: 1px solid var(--doc-line-soft);
+  border-radius: 18px;
+  background: var(--doc-bg-soft);
+}
+
+.template-spotlight .spotlight-lead {
+  margin-top: 10px;
+}
+
+.template-spotlight .spotlight-lead > * {
+  background: var(--doc-bg-soft);
+  border-radius: 16px;
+  padding: 16px 18px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.stat-card {
+  padding: 16px;
+  border: 1px solid var(--doc-line-soft);
+  border-radius: 18px;
+  background: var(--doc-bg-soft);
+  display: grid;
+  gap: 6px;
+}
+
+.stat-label {
+  color: var(--doc-muted);
+  font-size: 13px;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.stat-delta {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.stat-delta.positive {
+  color: #099268;
+}
+
+.stat-delta.negative {
+  color: #d6336c;
+}
+
+.studio-document.theme-slate .document-intro,
+.studio-document.theme-slate .md-toc,
+.studio-document.theme-slate .md-section,
+.studio-document.theme-slate .section-card,
+.studio-document.theme-slate .md-table-shell,
+.studio-document.theme-slate .md-code,
+.studio-document.theme-slate .md-figure,
+.studio-document.theme-slate .md-callout {
+  box-shadow: none;
+}
+
+@media (max-width: 820px) {
+  .template-two-column .two-column-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-document .section-heading.level-1 {
+    font-size: 34px;
+  }
+
+  .studio-document .section-heading.level-2 {
+    font-size: 26px;
+  }
+}
+</style>
+</head>
+<body>
+
+    <div class="studio-document theme-report mode-web">
+      <div class="document-shell">
+        
+        
+    <nav class="md-toc" aria-label="목차">
+      <div class="toc-title">목차</div>
+      <ol>
+        <li class="toc-depth-1"><a href="#cover">2026년 3월 운영 보고서</a></li><li class="toc-depth-2"><a href="#summary">핵심 요약</a></li><li class="toc-depth-3"><a href="#kpi">핵심 KPI</a></li><li class="toc-depth-3"><a href="#analysis">분석 요약</a></li><li class="toc-depth-2"><a href="#performance">월별 성과 비교</a></li><li class="toc-depth-2"><a href="#appendix">기술 참고</a></li>
+      </ol>
+    </nav>
+  
+        
+    <section class="md-section level-1 section-cover template-cover" data-section-id="cover" data-template="cover">
+      
+      
+        <div class="cover-shell">
+          <div class="cover-eyebrow">Monthly Report</div>
+          <h1 id="cover" class="section-heading level-1">2026년 3월 운영 보고서</h1>
+          <div class="cover-body"><p class="md-paragraph is-lead" data-block-id="cover__paragraph_1">이번 문서는 <strong>Growth Lab</strong> 의 핵심 KPI, 이슈, 우선순위를 보기 좋게 정리한 예시입니다.</p>
+      <aside class="md-callout type-success " data-block-id="cover__quote_1">
+        <div class="callout-title">배포 완료</div>
+        <div class="callout-body"></div>
+      </aside>
+    
+    <section class="md-section level-2 section-two-column template-two-column" data-section-id="summary" data-template="two-column">
+      
+      
+        <h2 id="summary" class="section-heading level-2">핵심 요약</h2>
+        
+        <div class="two-column-grid">
+          <div class="column column-left">
+    <section class="md-section level-3 section-stats template-stats-list" data-section-id="kpi" data-template="stats-list">
+      
+      <h3 id="kpi" class="section-heading level-3">핵심 KPI</h3><div class="stats-grid">
+                <article class="stat-card">
+                  <div class="stat-label">전환율</div>
+                  <div class="stat-value">4.1%</div>
+                  <div class="stat-delta positive">+0.8%p</div>
+                </article>
+              
+                <article class="stat-card">
+                  <div class="stat-label">매출</div>
+                  <div class="stat-value">1.24억</div>
+                  <div class="stat-delta positive">+18%</div>
+                </article>
+              
+                <article class="stat-card">
+                  <div class="stat-label">활성 사용자</div>
+                  <div class="stat-value">1,480</div>
+                  <div class="stat-delta positive">+23%</div>
+                </article>
+              </div>
+      <aside class="md-callout type-info " data-block-id="kpi__quote_1">
+        <div class="callout-title">메모</div>
+        <div class="callout-body"><p class="md-paragraph" data-block-id="kpi__quote_1__body__paragraph_1">광고 유입은 증가했지만, 리텐션 개선은 아직 추가 실험이 필요합니다.</p></div>
+      </aside>
+    
+    </section>
+  </div>
+          <div class="column column-right">
+    <section class="md-section level-3 template-default" data-section-id="analysis" data-template="default">
+      <h3 id="analysis" class="section-heading level-3">분석 요약</h3>
+      <p class="md-paragraph" data-block-id="analysis__paragraph_1">이번 달은 <strong>상단 퍼널 개선</strong>과 랜딩 페이지 변경으로 인해 신규 유입이 증가했습니다.</p><blockquote class="md-blockquote " data-block-id="analysis__quote_1"><p class="md-paragraph" data-block-id="analysis__quote_1__body__paragraph_1">단순히 유입만 늘어난 것이 아니라, 초기 전환 품질도 함께 개선되었습니다.</p></blockquote>
+    <section class="md-section level-4 template-default" data-section-id="다음-액션" data-template="default">
+      <h4 id="다음-액션" class="section-heading level-4">다음 액션</h4>
+      <ul class="md-list " data-block-id="다음-액션__list_1"><li>결제 퍼널 이탈 원인 재분석</li><li>2차 리텐션 코호트 점검</li><li>운영 지표용 카드 템플릿 공통화</li></ul>
+    </section>
+  
+    </section>
+  </div>
+        </div>
+      
+    </section>
+  
+    <section class="md-section level-2 template-default" data-section-id="performance" data-template="default">
+      <h2 id="performance" class="section-heading level-2">월별 성과 비교</h2>
+      
+      <div class="md-table-shell" data-block-id="performance__table_1">
+        <table class="md-table zebra bordered compact">
+          <caption>월별 성과 비교</caption>
+          <colgroup><col style="width:140px" /><col style="width:120px" /><col style="width:120px" /></colgroup>
+          <thead>
+            <tr><th class="align-left">항목</th><th class="align-right">목표</th><th class="align-right is-emphasis">실적</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="align-left">매출</td><td class="align-right">100</td><td class="align-right is-emphasis">124</td></tr><tr><td class="align-left">전환율</td><td class="align-right">3.2</td><td class="align-right is-emphasis">4.1</td></tr><tr><td class="align-left">활성 사용자</td><td class="align-right">1200</td><td class="align-right is-emphasis">1480</td></tr>
+          </tbody>
+        </table>
+      </div>
+    
+      <figure class="md-figure align-center" data-block-id="performance__image_1" style="--figure-width:88%;">
+        <img src="https://dummyimage.com/1200x520/e5eefc/1f3b7a.png&amp;text=KPI+Chart" alt="KPI 차트" loading="lazy" />
+        <figcaption>차트 영역도 마크다운 아래 속성 한 줄로 조정할 수 있습니다.</figcaption>
+      </figure>
+    
+    </section>
+  
+    <section class="md-section level-2 section-card template-card" data-section-id="appendix" data-template="card">
+      
+      <div class="section-card"><h2 id="appendix" class="section-heading level-2">기술 참고</h2>
+      <div class="md-code " data-block-id="appendix__code_1">
+        <div class="code-header"><div class="code-title">preview-pipeline.js</div><span class="code-lang">js</span></div>
+        <pre><code>function renderPreview(markdown) {
+  return markdown;
+}</code></pre>
+      </div>
+    </div>
+    </section>
+  </div>
+        </div>
+      
+    </section>
+  
+      </div>
+    </div>
+  
+</body>
+</html>

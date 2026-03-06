@@ -1,0 +1,14 @@
+{
+  "name": "markdown-pattern-studio",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Markdown-first live preview studio with CodeMirror editor and pattern-based HTML rendering",
+  "scripts": {
+    "start": "node server.js",
+    "md2html": "node scripts/md-to-html.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

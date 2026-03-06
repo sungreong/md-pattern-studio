@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="Local KPI Board">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#eff6ff" />
+      <stop offset="100%" stop-color="#dbeafe" />
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)" />
+  <rect x="72" y="72" width="1136" height="496" rx="28" fill="#ffffff" stroke="#bfdbfe" stroke-width="3" />
+  <text x="120" y="146" font-size="44" font-family="Pretendard, 'Noto Sans KR', sans-serif" fill="#1e3a8a" font-weight="700">Local KPI Snapshot</text>
+  <text x="120" y="190" font-size="24" font-family="Pretendard, 'Noto Sans KR', sans-serif" fill="#475569">샘플 로컬 이미지 렌더링 테스트</text>
+  <rect x="120" y="238" width="320" height="220" rx="20" fill="#f8fafc" stroke="#cbd5e1" />
+  <rect x="480" y="238" width="320" height="220" rx="20" fill="#f8fafc" stroke="#cbd5e1" />
+  <rect x="840" y="238" width="320" height="220" rx="20" fill="#f8fafc" stroke="#cbd5e1" />
+  <text x="152" y="292" font-size="22" font-family="Pretendard, 'Noto Sans KR', sans-serif" fill="#334155">매출</text>
+  <text x="152" y="360" font-size="48" font-family="Pretendard, 'Noto Sans KR', sans-serif" fill="#0f172a" font-weight="700">124</text>
+  <text x="152" y="404" font-size="24" font-family="Pretendard, 'Noto Sans KR', sans-serif" fill="#0f766e">+24%</text>
+  <text x="512" y="292" font-size="22" font-family="Pretendard, 'Noto Sans KR', sans-serif" fill="#334155">전환율</text>
+  <text x="512" y="360" font-size="48" font-family="Pretendard, 'Noto Sans KR', sans-serif" fill="#0f172a" font-weight="700">4.1%</text>
+  <text x="512" y="404" font-size="24" font-family="Pretendard, 'Noto Sans KR', sans-serif" fill="#0f766e">+0.9%p</text>
+  <text x="872" y="292" font-size="22" font-family="Pretendard, 'Noto Sans KR', sans-serif" fill="#334155">활성 사용자</text>
+  <text x="872" y="360" font-size="48" font-family="Pretendard, 'Noto Sans KR', sans-serif" fill="#0f172a" font-weight="700">1,480</text>
+  <text x="872" y="404" font-size="24" font-family="Pretendard, 'Noto Sans KR', sans-serif" fill="#0f766e">+23%</text>
+</svg>

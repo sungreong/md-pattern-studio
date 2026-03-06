@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Markdown Pattern Studio</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/document.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <div class="brand-mark">M</div>
+          <div>
+            <h1>Markdown Pattern Studio</h1>
+            <p>왼쪽은 패턴 가이드, 가운데는 마크다운 편집기, 오른쪽은 실시간 HTML 렌더입니다.</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <label class="topbar-select-label">
+            <span>테마 미리보기</span>
+            <select id="themeSelect"></select>
+          </label>
+          <button id="loadSampleBtn" type="button">샘플</button>
+          <button id="openMdBtn" type="button">MD 열기</button>
+          <button id="saveMdBtn" type="button">MD 저장</button>
+          <button id="saveHtmlBtn" type="button">HTML 저장</button>
+          <input type="file" id="openMdInput" accept=".md,.markdown,text/markdown" hidden />
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="pane pane-sidebar">
+          <div class="pane-head">
+            <div>
+              <strong>패턴 가이드</strong>
+              <span id="statusText">초기화 중</span>
+            </div>
+            <span class="pill" id="editorModePill">로딩</span>
+          </div>
+
+          <section class="sidebar-section">
+            <h2>지원하는 방식</h2>
+            <ul class="guide-bullets">
+              <li>기본 마크다운 문법 그대로 작성</li>
+              <li>heading 뒤 속성 블록으로 섹션 템플릿 지정</li>
+              <li>표/이미지 아래 <code>{: ... }</code> 한 줄로 스타일 지정</li>
+              <li>옵시디안 스타일 callout 지원</li>
+            </ul>
+          </section>
+
+          <section class="sidebar-section">
+            <div class="section-row">
+              <h2>빠른 삽입</h2>
+            </div>
+            <div id="snippetGrid" class="snippet-grid"></div>
+          </section>
+
+          <section class="sidebar-section">
+            <div class="section-row">
+              <h2>패턴 예시</h2>
+            </div>
+            <div id="patternGuide" class="pattern-guide"></div>
+          </section>
+
+          <section class="sidebar-section outline-section">
+            <div class="section-row">
+              <h2>문서 아웃라인</h2>
+              <button id="refreshOutlineBtn" class="ghost-button" type="button">새로고침</button>
+            </div>
+            <div id="outlineList" class="outline-list"></div>
+          </section>
+        </aside>
+
+        <section class="pane pane-editor">
+          <div class="pane-head">
+            <div>
+              <strong>Markdown Editor</strong>
+              <span id="editorMeta">문서 분석 중</span>
+            </div>
+            <div class="pane-tools">
+              <span id="currentSectionBadge" class="pill pill-active">현재 섹션 없음</span>
+            </div>
+          </div>
+
+          <div class="editor-helper">
+            <span>#, ##, 표, 이미지, 코드블록을 그대로 쓰고 필요한 곳에만 패턴 문법을 추가하세요.</span>
+          </div>
+
+          <div id="editorRoot" class="editor-root"></div>
+          <textarea id="editorFallback" class="editor-fallback" hidden spellcheck="false"></textarea>
+
+          <div class="editor-footer">
+            <span id="cursorMeta">Ln 1, Col 1</span>
+            <span id="documentMeta">Words 0 · Chars 0</span>
+          </div>
+        </section>
+
+        <section class="pane pane-preview">
+          <div class="pane-head">
+            <div>
+              <strong>Live Preview</strong>
+              <span>왼쪽 편집 내용이 오른쪽 HTML로 즉시 반영됩니다</span>
+            </div>
+            <div class="segmented" id="previewModeButtons">
+              <button type="button" data-preview-mode="rendered" class="is-active">Rendered</button>
+              <button type="button" data-preview-mode="slides">Slides</button>
+              <button type="button" data-preview-mode="html">HTML</button>
+            </div>
+            <div class="slide-controls" id="slideControls" hidden>
+              <button id="prevSlideBtn" type="button">Prev</button>
+              <span id="slideMeta">1 / 1</span>
+              <button id="nextSlideBtn" type="button">Next</button>
+            </div>
+          </div>
+          <div id="previewRoot" class="preview-root"></div>
+          <pre id="previewSource" class="preview-source" hidden></pre>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
