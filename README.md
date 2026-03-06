@@ -129,6 +129,18 @@ npm run md2html -- test/notes.md --out test/notes.cli.html --theme report --stan
 
 참고: 브라우저 보안 정책 때문에 `MD 열기`에서 파일의 실제 절대 경로를 제공하지 않는 환경이 있습니다. 이 경우 앱 미리보기는 원본 상대경로를 유지하고, CLI(`--base-dir`)를 사용하면 경로 해석을 강제할 수 있습니다.
 
+## HTML 변환 결과 캡처
+
+아래 이미지는 Markdown을 HTML로 변환한 뒤(standalone) 브라우저에서 연 결과 예시입니다.
+
+![HTML 변환 결과 화면](assets/images/result.png)
+
+확인 포인트:
+
+1. 우측 `Outline`에서 섹션 이동이 가능한지
+2. 하단 `Prev/Next`로 페이지(슬라이드) 이동이 가능한지
+3. `Stack` 버튼으로 문서형 보기 전환이 되는지
+
 ## 코드 복사 버튼 / 높이 제어
 
 - 코드 블록은 기본적으로 `max-height: 360px` 기준으로 내부 스크롤됩니다.
