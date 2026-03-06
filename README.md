@@ -26,6 +26,27 @@ http://localhost:3188
 - Mermaid 렌더링 지원
 - standalone HTML 아웃라인/코드 복사 버튼 지원
 
+## 화면 구성과 사용 방법
+
+![Markdown Pattern Studio 전체 화면](assets/images/web.png)
+
+처음 사용할 때는 아래 순서로 진행하면 됩니다.
+
+1. 왼쪽 `패턴 가이드`에서 문법을 확인하고, `빠른 삽입` 버튼으로 자주 쓰는 블록을 넣습니다.
+2. 가운데 `Markdown Editor`에서 문서를 작성합니다.
+3. 오른쪽 `Live Preview`에서 즉시 결과를 확인합니다.
+4. 상단 버튼으로 필요 작업을 실행합니다.
+   - `샘플`: 예제 문서 로드
+   - `MD 열기`: 로컬 Markdown 불러오기
+   - `MD 저장`: 현재 Markdown 저장
+   - `HTML 저장`: 렌더링 결과를 HTML로 저장
+
+프리뷰 모드:
+
+- `Rendered`: 보고서형 문서 보기
+- `Slides`: 페이지 분리(`{: .page-break}`) 기준 슬라이드 보기
+- `HTML`: 렌더된 원본 HTML 확인
+
 ## 템플릿/속성 문법
 
 ### 1) Front Matter
