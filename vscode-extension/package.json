@@ -2,7 +2,7 @@
   "name": "markdown-pattern-studio-preview",
   "displayName": "Markdown Pattern Studio Preview",
   "description": "Preview Markdown Pattern Studio CLI output in a VS Code webview.",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "publisher": "local",
   "engines": {
     "vscode": "^1.95.0"

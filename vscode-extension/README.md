@@ -7,6 +7,7 @@ This extension runs the repository CLI (`scripts/md-to-html.mjs`) and opens the 
 - `Markdown Studio: Open Preview` command
 - `Markdown Studio: Refresh Preview` command
 - Auto refresh on markdown save (`mdStudioPreview.autoOnSave`)
+- Outline collapsed/expanded state is remembered per document
 - File URI rewrite (`file://...`) to webview-safe resource URIs
 
 ## Settings
@@ -25,6 +26,8 @@ Default behavior:
 3. If still missing, show `Select Script` picker and save selected path to user settings.
 4. If `mdStudioPreview.cliScriptPath` is explicitly customized, that path is prioritized (no automatic bundled fallback override).
 5. View mode: `preferredViewMode=auto` switches to Stack on narrow webview panels to avoid tiny slide scaling.
+6. Outline panel remembers the last collapsed/expanded state for each markdown document.
+7. Cursor-sync parser also falls back to bundled `public/core/engine.js` when workspace parser is missing.
 
 ## Cursor Sync on Save
 
@@ -52,5 +55,5 @@ npm run package:vsix
 Then install:
 
 ```bash
-code --install-extension .\markdown-pattern-studio-preview-0.1.2.vsix
+code --install-extension .\markdown-pattern-studio-preview-0.1.4.vsix
 ```

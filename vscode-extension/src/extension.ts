@@ -23,6 +23,7 @@ interface PreviewSession {
   lastSyncedSectionId: string | null;
   isBridgeReady: boolean;
   pendingSyncSectionId: string | null;
+  outlineCollapsed: boolean;
 }
 
 interface RenderOutput {
@@ -46,12 +47,15 @@ const cursorLineCache = new Map<string, number>();
 const cliPromptDismissedUntil = new Map<string, number>();
 let lastPreviewKey: string | null = null;
 let extensionInstallPath = '';
+let extensionContextRef: vscode.ExtensionContext | null = null;
+const outlineStateKeyPrefix = 'mdStudioPreview:outlineCollapsed:';
 const dynamicImportModule = new Function('modulePath', 'return import(modulePath);') as (
   modulePath: string,
 ) => Promise<Record<string, unknown>>;
 
 export function activate(context: vscode.ExtensionContext) {
   extensionInstallPath = context.extensionPath;
+  extensionContextRef = context;
   context.subscriptions.push(
     vscode.commands.registerCommand('mdStudioPreview.open', async () => {
       const document = await resolveTargetDocument();
@@ -111,6 +115,7 @@ export function deactivate() {
     session.panel.dispose();
   }
   sessions.clear();
+  extensionContextRef = null;
 }
 
 function readConfig(): ExtensionConfig {
@@ -208,6 +213,7 @@ async function previewDocument(document: vscode.TextDocument, reason: PreviewRea
     const html = injectPreviewSyncBridge(
       rewriteLocalFileUris(renderOutput.html, session.panel.webview),
       config.preferredViewMode,
+      session.outlineCollapsed,
     );
     // Reset per-render sync marker because replacing webview HTML resets scroll/state.
     session.lastSyncedSectionId = null;
@@ -262,15 +268,22 @@ function ensureSession(document: vscode.TextDocument, reveal: boolean): PreviewS
     lastSyncedSectionId: null,
     isBridgeReady: false,
     pendingSyncSectionId: null,
+    outlineCollapsed: loadOutlineCollapsedState(key),
   };
   sessions.set(key, session);
 
   panel.webview.onDidReceiveMessage((message: unknown) => {
     if (!message || typeof message !== 'object') return;
-    const payload = message as { type?: unknown };
-    if (payload.type !== 'mdStudioPreview.ready') return;
-    session.isBridgeReady = true;
-    void flushPendingSync(session);
+    const payload = message as { type?: unknown; collapsed?: unknown };
+    if (payload.type === 'mdStudioPreview.ready') {
+      session.isBridgeReady = true;
+      void flushPendingSync(session);
+      return;
+    }
+    if (payload.type !== 'mdStudioPreview.outlineStateChanged') return;
+    if (typeof payload.collapsed !== 'boolean') return;
+    session.outlineCollapsed = payload.collapsed;
+    void persistOutlineCollapsedState(session.key, payload.collapsed);
   });
 
   panel.onDidDispose(() => {
@@ -334,6 +347,11 @@ function isDefaultCliScriptPath(rawValue: string): boolean {
 function resolveBundledCliScriptPath(): string | null {
   if (!extensionInstallPath) return null;
   return path.join(extensionInstallPath, 'scripts', 'md-to-html.mjs');
+}
+
+function resolveBundledParserEnginePath(): string | null {
+  if (!extensionInstallPath) return null;
+  return path.join(extensionInstallPath, 'public', 'core', 'engine.js');
 }
 
 async function resolveAvailableCliScriptPath(
@@ -536,15 +554,20 @@ function resolveBestCursorLine(document: vscode.TextDocument): number | null {
 
 async function loadParseMarkdownParser(workspaceFolder: vscode.WorkspaceFolder): Promise<ParseMarkdownDocumentFn | null> {
   const workspaceRoot = workspaceFolder.uri.fsPath;
-  const cached = parserCache.get(workspaceRoot);
-  if (cached) return cached;
-
-  const enginePath = path.join(workspaceRoot, 'public', 'core', 'engine.js');
-  try {
-    await fs.access(enginePath);
-  } catch {
-    return null;
+  const workspaceEnginePath = path.join(workspaceRoot, 'public', 'core', 'engine.js');
+  let enginePath: string | null = null;
+  if (await fileExists(workspaceEnginePath)) {
+    enginePath = workspaceEnginePath;
+  } else {
+    const bundledEnginePath = resolveBundledParserEnginePath();
+    if (bundledEnginePath && (await fileExists(bundledEnginePath))) {
+      enginePath = bundledEnginePath;
+    }
   }
+  if (!enginePath) return null;
+
+  const cached = parserCache.get(enginePath);
+  if (cached) return cached;
 
   try {
     const moduleUrl = pathToFileURL(enginePath).href;
@@ -552,7 +575,7 @@ async function loadParseMarkdownParser(workspaceFolder: vscode.WorkspaceFolder):
     const parseMarkdownDocument = moduleNs.parseMarkdownDocument;
     if (typeof parseMarkdownDocument !== 'function') return null;
     const parser = parseMarkdownDocument as ParseMarkdownDocumentFn;
-    parserCache.set(workspaceRoot, parser);
+    parserCache.set(enginePath, parser);
     return parser;
   } catch (error) {
     console.warn('[mdStudioPreview] unable to import parser module:', error);
@@ -615,7 +638,11 @@ async function postSyncMessageWithRetry(webview: vscode.Webview, sectionId: stri
   return delivered;
 }
 
-function injectPreviewSyncBridge(html: string, preferredViewMode: 'auto' | 'slides' | 'stack'): string {
+function injectPreviewSyncBridge(
+  html: string,
+  preferredViewMode: 'auto' | 'slides' | 'stack',
+  initialOutlineCollapsed: boolean,
+): string {
   if (html.includes('mdStudioPreview.syncSection')) return html;
   const bridgeScript = `
 <script>
@@ -623,11 +650,16 @@ function injectPreviewSyncBridge(html: string, preferredViewMode: 'auto' | 'slid
   if (window.__mdStudioPreviewSyncInstalled) return;
   window.__mdStudioPreviewSyncInstalled = true;
   const preferredViewMode = ${JSON.stringify(preferredViewMode)};
+  const initialOutlineCollapsed = ${initialOutlineCollapsed ? 'true' : 'false'};
 
   const vscodeApi = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
   const notifyReady = () => {
     if (!vscodeApi || typeof vscodeApi.postMessage !== 'function') return;
     vscodeApi.postMessage({ type: 'mdStudioPreview.ready' });
+  };
+  const notifyOutlineState = (collapsed) => {
+    if (!vscodeApi || typeof vscodeApi.postMessage !== 'function') return;
+    vscodeApi.postMessage({ type: 'mdStudioPreview.outlineStateChanged', collapsed: Boolean(collapsed) });
   };
 
   const notifyReadyTwice = () => {
@@ -658,6 +690,43 @@ function injectPreviewSyncBridge(html: string, preferredViewMode: 'auto' | 'slid
   const modeCheckDelays = [0, 80, 220, 450, 900];
   for (const waitMs of modeCheckDelays) {
     window.setTimeout(applyPreferredViewMode, waitMs);
+  }
+
+  const getOutlineCollapsed = (outline) => Boolean(outline && outline.classList.contains('is-collapsed'));
+
+  const applyInitialOutlineState = () => {
+    const outline = document.querySelector('.export-outline');
+    if (!outline) return false;
+    const toggle = outline.querySelector('[data-outline-toggle]');
+    const current = getOutlineCollapsed(outline);
+    if (current !== initialOutlineCollapsed) {
+      if (toggle && typeof toggle.click === 'function') {
+        toggle.click();
+      } else {
+        outline.classList.toggle('is-collapsed', initialOutlineCollapsed);
+      }
+    }
+
+    const collapsed = getOutlineCollapsed(outline);
+    if (toggle) {
+      toggle.textContent = collapsed ? 'Show' : 'Hide';
+      if (!toggle.hasAttribute('data-md-studio-outline-bound')) {
+        toggle.setAttribute('data-md-studio-outline-bound', '1');
+        toggle.addEventListener('click', () => {
+          window.setTimeout(() => {
+            notifyOutlineState(getOutlineCollapsed(outline));
+          }, 0);
+        });
+      }
+    }
+
+    notifyOutlineState(collapsed);
+    return true;
+  };
+
+  const outlineCheckDelays = [0, 80, 220, 450, 900];
+  for (const waitMs of outlineCheckDelays) {
+    window.setTimeout(applyInitialOutlineState, waitMs);
   }
 
   const findByDataValue = (selector, attrName, targetValue) => {
@@ -791,6 +860,20 @@ async function fileExists(targetPath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function getOutlineStateKey(documentKey: string): string {
+  return `${outlineStateKeyPrefix}${documentKey}`;
+}
+
+function loadOutlineCollapsedState(documentKey: string): boolean {
+  if (!extensionContextRef) return false;
+  return extensionContextRef.workspaceState.get<boolean>(getOutlineStateKey(documentKey), false);
+}
+
+async function persistOutlineCollapsedState(documentKey: string, collapsed: boolean): Promise<void> {
+  if (!extensionContextRef) return;
+  await extensionContextRef.workspaceState.update(getOutlineStateKey(documentKey), collapsed);
 }
 
 async function cleanupTempFile(tempPath: string | null): Promise<void> {

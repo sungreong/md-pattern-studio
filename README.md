@@ -163,7 +163,7 @@ npm run package:vsix
 설치:
 
 ```bash
-code --install-extension .\markdown-pattern-studio-preview-0.1.2.vsix
+code --install-extension .\markdown-pattern-studio-preview-0.1.4.vsix
 ```
 
 ### 커서 동기화 동작 (Ctrl+S)

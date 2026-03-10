@@ -16,7 +16,7 @@ npm run package:vsix
 ### Install
 
 ```bash
-code --install-extension .\markdown-pattern-studio-preview-0.1.2.vsix --force
+code --install-extension .\markdown-pattern-studio-preview-0.1.4.vsix --force
 ```
 
 ### Basic Usage
@@ -31,17 +31,16 @@ code --install-extension .\markdown-pattern-studio-preview-0.1.2.vsix --force
 When `mdStudioPreview.cursorSyncOnSave=true`, save triggers this sequence:
 
 1. Render markdown through the CLI.
-2. Read the active editor cursor line.
+2. Resolve current cursor line.
 3. Parse sections with `parseMarkdownDocument` from `public/core/engine.js`.
-4. Pick the last section whose line is less than or equal to cursor line.
-5. Send a sync message to webview.
-6. Webview uses outline-first navigation (`data-outline-id`) to move preview.
+4. Pick the last section whose line is less than or equal to the cursor line.
+5. Send a sync message to the webview.
+6. Move preview using outline-first navigation (`data-outline-id`).
 
 Notes:
 
 - Sync is section-based (heading), not paragraph-exact.
 - If no heading exists, render still runs and sync is skipped.
-- If the active editor is not the saved markdown document, sync is skipped.
 
 ## 3) Settings
 
@@ -64,26 +63,29 @@ Notes:
   - Default: `["--standalone"]`
 - `mdStudioPreview.preferredViewMode`
   - Preview presentation mode.
-  - `auto`: narrow webview에서는 stack로 자동 전환.
-  - `slides`: 항상 slides 우선.
-  - `stack`: 항상 stack 우선.
+  - `auto`: switch to stack on narrow webview.
+  - `slides`: always prefer slides.
+  - `stack`: always prefer stack.
   - Default: `"auto"`
 
-Recommended defaults:
+Outline state:
 
-- Standard writing flow: `autoOnSave=true`, `cursorSyncOnSave=true`
-- If auto jumping feels distracting: `cursorSyncOnSave=false`
+- Outline hide/show state is remembered per markdown document.
+- Default for new documents is expanded (open).
 
 ## 4) Runtime Flow
 
-1. Extension receives `onDidSaveTextDocument`.
+1. Extension receives preview command or save event.
 2. Resolves CLI path in this order:
    - `mdStudioPreview.cliScriptPath`
    - bundled CLI (`<extension>/scripts/md-to-html.mjs`) only when the setting is default and missing
    - manual picker (`Select Script`) as final fallback
-3. Rewrites `file://` asset URLs with `webview.asWebviewUri(...)`.
-4. Injects rendered HTML into webview.
-5. Optionally sends cursor-section sync message.
+3. Resolves parser path for cursor sync:
+   - workspace `public/core/engine.js`
+   - bundled parser (`<extension>/public/core/engine.js`) fallback
+4. Runs CLI and loads rendered HTML.
+5. Rewrites `file://` asset URLs with `webview.asWebviewUri(...)`.
+6. Injects bridge script (cursor sync, preferred mode, outline state persistence).
 
 ## 5) Troubleshooting
 
@@ -95,7 +97,6 @@ Recommended defaults:
 - If script is missing and `cliScriptPath` is default, extension tries bundled CLI automatically.
 - If `cliScriptPath` is customized, that path is used as-is (no bundled auto override).
 - If script is still missing, click `Select Script` in the popup and choose `md-to-html.mjs`.
-  The extension stores this path in user settings automatically.
 
 Example (absolute path):
 
@@ -105,23 +106,17 @@ Example (absolute path):
 }
 ```
 
-### Save refresh works but cursor sync does not
+### Outline keeps reopening
 
-- Confirm `mdStudioPreview.cursorSyncOnSave=true`.
-- Confirm the active editor tab is the same markdown file you saved.
-- Confirm the document has headings (`#`, `##`, ...).
-
-### Local images are missing
-
-- Confirm relative paths are valid from the markdown file directory.
-- If needed, adjust `mdStudioPreview.extraArgs` for your CLI behavior.
+- Update to the latest extension (`0.1.4` or newer).
+- Hide once; subsequent refresh/save should preserve collapsed state for that document.
 
 ## 6) Development Notes
 
 - Source: `vscode-extension/src/extension.ts`
 - Build: `npm run build`
 - Package: `npm run package:vsix`
-- Install test: `code --install-extension .\markdown-pattern-studio-preview-0.1.2.vsix --force`
+- Install test: `code --install-extension .\markdown-pattern-studio-preview-0.1.4.vsix --force`
 
 ## 7) Uninstall / Cleanup Guide
 
@@ -144,7 +139,7 @@ Find `local.markdown-pattern-studio-preview@...` in the list.
 If you no longer need the package file, delete:
 
 ```text
-vscode-extension/markdown-pattern-studio-preview-0.1.2.vsix
+vscode-extension/markdown-pattern-studio-preview-0.1.4.vsix
 ```
 
 ### Optional: remove local extension folder manually
@@ -152,5 +147,5 @@ vscode-extension/markdown-pattern-studio-preview-0.1.2.vsix
 If needed, remove this folder:
 
 ```text
-%USERPROFILE%\.vscode\extensions\local.markdown-pattern-studio-preview-0.1.2
+%USERPROFILE%\.vscode\extensions\local.markdown-pattern-studio-preview-0.1.4
 ```
