@@ -133,6 +133,18 @@ npm run md2html -- test/notes.md --out test/notes.cli.html --theme report --stan
 
 `vscode-extension/` 폴더에는 CLI 렌더 결과를 VS Code Webview에서 보여주는 확장 소스가 포함되어 있습니다.
 
+확장 동작 예시 화면:
+
+![VS Code Extension Preview 예시](assets/images/extension_example.png)
+
+이 화면은 VS Code에서 Markdown을 저장했을 때, 확장이 CLI 렌더링 결과를 Webview로 보여주고 Outline/페이지 네비게이션을 제공하는 상태입니다.
+
+사용 흐름:
+
+1. VS Code에서 Markdown 파일을 연 뒤 `Markdown Studio: Open Preview` 실행
+2. 문서를 수정하고 저장(`Ctrl+S`)하면 자동 렌더링/갱신
+3. 우측 Outline에서 섹션 이동, 하단 `Prev/Next`로 페이지 이동, `Stack`으로 문서형 보기 전환
+
 주요 동작:
 
 - 명령: `Markdown Studio: Open Preview`
