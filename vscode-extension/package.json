@@ -1,0 +1,112 @@
+{
+  "name": "markdown-pattern-studio-preview",
+  "displayName": "Markdown Pattern Studio Preview",
+  "description": "Preview Markdown Pattern Studio CLI output in a VS Code webview.",
+  "version": "0.1.2",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:mdStudioPreview.open",
+    "onCommand:mdStudioPreview.refresh",
+    "onLanguage:markdown"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "mdStudioPreview.open",
+        "title": "Markdown Studio: Open Preview"
+      },
+      {
+        "command": "mdStudioPreview.refresh",
+        "title": "Markdown Studio: Refresh Preview"
+      }
+    ],
+    "configuration": {
+      "title": "Markdown Studio Preview",
+      "properties": {
+        "mdStudioPreview.autoOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically refresh preview when a markdown file is saved."
+        },
+        "mdStudioPreview.cursorSyncOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "After save render, move preview to the section under the active cursor."
+        },
+        "mdStudioPreview.nodePath": {
+          "type": "string",
+          "default": "node",
+          "description": "Node.js executable path used to run scripts/md-to-html.mjs."
+        },
+        "mdStudioPreview.cliScriptPath": {
+          "type": "string",
+          "default": "scripts/md-to-html.mjs",
+          "description": "CLI script path. Relative paths are resolved from workspace root. Absolute paths are also supported."
+        },
+        "mdStudioPreview.preferredViewMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "slides",
+            "stack"
+          ],
+          "default": "auto",
+          "description": "Preferred presentation mode in preview webview. auto switches to stack on narrow panels."
+        },
+        "mdStudioPreview.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "--standalone"
+          ],
+          "description": "Additional CLI arguments appended after --base-dir."
+        }
+      }
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "mdStudioPreview.open",
+          "when": "resourceLangId == markdown",
+          "group": "navigation@20"
+        },
+        {
+          "command": "mdStudioPreview.refresh",
+          "when": "resourceLangId == markdown",
+          "group": "navigation@21"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "sync:bundle": "node ./tools/sync-cli-bundle.mjs",
+    "smoke:bundled-cli": "node ./scripts/md-to-html.mjs --help",
+    "build": "npm run sync:bundle && npm run smoke:bundled-cli && tsc -p .",
+    "watch": "tsc -w -p .",
+    "vscode:prepublish": "npm run build",
+    "package:vsix": "vsce package"
+  },
+  "files": [
+    "dist/**",
+    "README.md",
+    "EXTENSION_GUIDE.md",
+    "scripts/md-to-html.mjs",
+    "public/core/**",
+    "public/document.css"
+  ],
+  "devDependencies": {
+    "@types/node": "^20.17.24",
+    "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^3.6.2",
+    "typescript": "^5.8.2"
+  }
+}

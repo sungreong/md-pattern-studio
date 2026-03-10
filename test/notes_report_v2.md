@@ -4,7 +4,6 @@ pageHeight: 100vh
 ---
 
 # 2026년 3월 운영 리포트 {#cover .cover eyebrow="Monthly Report"}
-
 ---
 {: .page-break}
 

@@ -129,6 +129,65 @@ npm run md2html -- test/notes.md --out test/notes.cli.html --theme report --stan
 
 참고: 브라우저 보안 정책 때문에 `MD 열기`에서 파일의 실제 절대 경로를 제공하지 않는 환경이 있습니다. 이 경우 앱 미리보기는 원본 상대경로를 유지하고, CLI(`--base-dir`)를 사용하면 경로 해석을 강제할 수 있습니다.
 
+## VS Code Extension: CLI Preview
+
+`vscode-extension/` 폴더에는 CLI 렌더 결과를 VS Code Webview에서 보여주는 확장 소스가 포함되어 있습니다.
+
+주요 동작:
+
+- 명령: `Markdown Studio: Open Preview`
+- 명령: `Markdown Studio: Refresh Preview`
+- Markdown 저장 시 자동 갱신 (`mdStudioPreview.autoOnSave=true`)
+- Markdown 저장(`Ctrl+S`) 시 커서 기준 섹션으로 Preview 동기화 (`mdStudioPreview.cursorSyncOnSave=true`)
+- `file://` 자산 링크를 Webview URI로 변환
+
+설정:
+
+- `mdStudioPreview.autoOnSave` (기본값 `true`)
+- `mdStudioPreview.cursorSyncOnSave` (기본값 `true`)
+- `mdStudioPreview.nodePath` (기본값 `node`)
+- `mdStudioPreview.cliScriptPath` (기본값 `scripts/md-to-html.mjs`)
+- `mdStudioPreview.extraArgs` (기본값 `["--standalone"]`)
+
+기본 경로가 현재 워크스페이스에 없으면, 확장 내부에 번들된 CLI로 자동 fallback 후 렌더링합니다.
+
+패키징:
+
+```bash
+cd vscode-extension
+npm install
+npm run build
+npm run package:vsix
+```
+
+설치:
+
+```bash
+code --install-extension .\markdown-pattern-studio-preview-0.1.2.vsix
+```
+
+### 커서 동기화 동작 (Ctrl+S)
+
+기본값에서 Markdown을 저장하면 아래 순서로 동작합니다.
+
+1. 현재 Markdown을 CLI로 다시 렌더링
+2. 저장 시점의 에디터 커서 line을 기준으로 섹션(heading) 식별
+3. Webview의 Outline 이동 로직을 재사용해 해당 섹션으로 이동
+
+특징:
+
+- 문단 단위가 아닌 섹션 단위 동기화
+- Slides/Stack 모드 모두 기존 네비게이션 흐름 유지
+- 같은 섹션에서 연속 저장 시 불필요한 재이동 최소화
+
+끄고 싶을 때:
+
+- VS Code Settings에서 `mdStudioPreview.cursorSyncOnSave`를 `false`로 변경
+
+자세한 사용법/구조/트러블슈팅:
+
+- [Extension Guide](vscode-extension/EXTENSION_GUIDE.md)
+
 ## HTML 변환 결과 캡처
 
 아래 이미지는 Markdown을 HTML로 변환한 뒤(standalone) 브라우저에서 연 결과 예시입니다.

@@ -19,6 +19,7 @@ coverage/
 .cache/
 .tmp/
 tmp/
+*.vsix
 
 # OS / editor metadata
 .DS_Store
@@ -31,4 +32,3 @@ Thumbs.db
 # Local tooling / agent metadata
 .claude/
 .codex/
-
