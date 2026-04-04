@@ -33,4 +33,6 @@ Thumbs.db
 .claude/
 .codex/
 .gemini
+.agents
 ai_docs
+templates

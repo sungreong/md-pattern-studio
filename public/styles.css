@@ -509,6 +509,10 @@ textarea,
   overflow: auto;
 }
 
+.preview-root.is-slide-mode .doc-page-footer {
+  display: none;
+}
+
 .preview-source {
   margin: 0;
   padding: 18px 20px;

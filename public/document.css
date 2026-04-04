@@ -21,6 +21,18 @@
   --doc-accent-soft: rgba(94, 106, 210, 0.12);
 }
 
+.studio-document.theme-report {
+  --doc-text: #16263b;
+  --doc-muted: #4c6078;
+  --doc-line: rgba(172, 188, 212, 0.9);
+  --doc-line-soft: rgba(188, 202, 222, 0.78);
+  --doc-bg: #fbfdff;
+  --doc-bg-soft: #ecf3fb;
+  --doc-bg-strong: #e1ebf8;
+  --doc-accent: #3a63d6;
+  --doc-accent-soft: rgba(58, 99, 214, 0.14);
+}
+
 .studio-document.theme-slate {
   --doc-text: #e5edf6;
   --doc-muted: #9db0c8;
@@ -102,6 +114,8 @@
   padding: 0.14em 0.36em;
   border-radius: 8px;
   background: var(--doc-bg-soft);
+  color: var(--doc-text);
+  border: 1px solid var(--doc-line-soft);
   font-size: 0.92em;
 }
 
@@ -424,6 +438,7 @@
   border-radius: 18px;
   overflow: hidden;
   min-width: 0;
+  color: var(--doc-text);
 }
 
 .code-header {
@@ -469,9 +484,13 @@
   max-height: var(--code-max-height, var(--code-max-height-default));
   overflow: var(--code-overflow, auto);
   background: var(--doc-bg-strong);
-  color: inherit;
+  color: var(--doc-text);
   font-size: 13px;
   line-height: 1.7;
+}
+
+.md-code pre code {
+  color: var(--doc-text);
 }
 
 .mermaid-block .mermaid-render {
@@ -560,6 +579,7 @@
   border-bottom: 1px solid var(--doc-line-soft);
   text-align: left;
   vertical-align: top;
+  color: var(--doc-text);
 }
 
 .md-table th {
