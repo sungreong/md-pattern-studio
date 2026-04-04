@@ -931,12 +931,14 @@ function emptyFrameHtml() {
 }
 
 function buildFrameHtml(renderedHtml) {
+  const base = window.__MPS_PUBLIC_URI__ || '';
+  const cssHref = base ? `${base}/document.css` : '/document.css';
   return `<!doctype html>
 <html>
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <link rel="stylesheet" href="/document.css"/>
+  <link rel="stylesheet" href="${cssHref}"/>
   <style>
     body{margin:0;padding:16px 24px;background:#fff;}
     .studio-document{max-width:900px;margin:0 auto;}
@@ -947,12 +949,14 @@ function buildFrameHtml(renderedHtml) {
 }
 
 function buildSlideViewerHtml(renderedHtml) {
+  const base = window.__MPS_PUBLIC_URI__ || '';
+  const cssHref = base ? `${base}/document.css` : '/document.css';
   return `<!doctype html>
 <html>
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <link rel="stylesheet" href="/document.css"/>
+  <link rel="stylesheet" href="${cssHref}"/>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {

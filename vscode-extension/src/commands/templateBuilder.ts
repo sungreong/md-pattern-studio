@@ -13,28 +13,37 @@ export async function openTemplateBuilderCommand(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   const workspaceFolder = resolveWorkspaceFolder();
+  const insertState: InsertState = {
+    lastEditorUri: toInsertableUri(vscode.window.activeTextEditor),
+  };
 
   const htmlFilePath = await resolveBuilderHtmlPath(context, workspaceFolder);
   if (!htmlFilePath) {
     void vscode.window.showErrorMessage(
-      'Template Builder: public/template-builder.html not found. Open the workspace root or reinstall the extension.',
+      'Template Builder: public/template-builder-vscode.html not found. Open the workspace root or reinstall the extension.',
     );
     return;
   }
 
-  await createTemplateBuilderPanel(context, {
+  const panel = await createTemplateBuilderPanel(context, {
     htmlFilePath,
     onGenerate: async (markdown: string) => {
       await handleGenerate(markdown, workspaceFolder);
     },
     onInsert: async (markdown: string) => {
-      await handleInsert(markdown);
+      await handleInsert(markdown, insertState);
     },
     onCopy: async (markdown: string) => {
       await vscode.env.clipboard.writeText(markdown);
       void vscode.window.showInformationMessage('Template Builder: Markdown copied to clipboard 📋');
     },
   });
+
+  const activeEditorSub = vscode.window.onDidChangeActiveTextEditor((editor) => {
+    const uri = toInsertableUri(editor);
+    if (uri) insertState.lastEditorUri = uri;
+  });
+  panel.onDidDispose(() => activeEditorSub.dispose());
 }
 
 // ---------------------------------------------------------------------------
@@ -55,20 +64,20 @@ function resolveWorkspaceFolder(): vscode.WorkspaceFolder | null {
 // skillsDir resolver removed
 
 /**
- * Resolves the path to public/template-builder.html.
+ * Resolves the path to public/template-builder-vscode.html.
  * Priority:
- *   1. Workspace root / public/template-builder.html  (development mode)
- *   2. Extension install directory / public/template-builder.html (bundled)
+ *   1. Workspace root / public/template-builder-vscode.html  (development mode)
+ *   2. Extension install directory / public/template-builder-vscode.html (bundled)
  */
 async function resolveBuilderHtmlPath(
   context: vscode.ExtensionContext,
   workspaceFolder: vscode.WorkspaceFolder | null,
 ): Promise<string | null> {
   if (workspaceFolder) {
-    const workspacePath = path.join(workspaceFolder.uri.fsPath, 'public', 'template-builder.html');
+    const workspacePath = path.join(workspaceFolder.uri.fsPath, 'public', 'template-builder-vscode.html');
     if (await fileExists(workspacePath)) return workspacePath;
   }
-  const bundledPath = path.join(context.extensionPath, 'public', 'template-builder.html');
+  const bundledPath = path.join(context.extensionPath, 'public', 'template-builder-vscode.html');
   if (await fileExists(bundledPath)) return bundledPath;
   return null;
 }
@@ -105,18 +114,47 @@ async function handleGenerate(
   void vscode.window.showInformationMessage(`Template saved: templates/${fileName}`);
 }
 
-async function handleInsert(markdown: string): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
-  if (!editor) {
-    void vscode.window.showWarningMessage('Template Builder: No active text editor to insert into.');
-    return;
+async function handleInsert(markdown: string, state: InsertState): Promise<void> {
+  try {
+    const editor = await resolveInsertEditor(state);
+    const success = await editor.edit((editBuilder) => {
+      editBuilder.insert(editor.selection.active, markdown);
+    });
+    if (!success) {
+      void vscode.window.showErrorMessage('Template Builder: Insert failed.');
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    void vscode.window.showErrorMessage(`Template Builder: Unable to open insert target — ${msg}`);
   }
-  const success = await editor.edit((editBuilder) => {
-    editBuilder.insert(editor.selection.active, markdown);
-  });
-  if (!success) {
-    void vscode.window.showErrorMessage('Template Builder: Insert failed.');
+}
+
+interface InsertState {
+  lastEditorUri?: vscode.Uri;
+}
+
+function toInsertableUri(editor: vscode.TextEditor | undefined): vscode.Uri | undefined {
+  if (!editor) return undefined;
+  const scheme = editor.document.uri.scheme;
+  if (scheme === 'output' || scheme === 'debug' || scheme === 'vscode-userdata') return undefined;
+  return editor.document.uri;
+}
+
+async function resolveInsertEditor(state: InsertState): Promise<vscode.TextEditor> {
+  const active = vscode.window.activeTextEditor;
+  if (active) return active;
+
+  if (state.lastEditorUri) {
+    try {
+      const doc = await vscode.workspace.openTextDocument(state.lastEditorUri);
+      return await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false });
+    } catch {
+      // fallback below
+    }
   }
+
+  const untitledDoc = await vscode.workspace.openTextDocument({ language: 'markdown', content: '' });
+  return await vscode.window.showTextDocument(untitledDoc, { preview: false, preserveFocus: false });
 }
 
 function formatTimestamp(date: Date): string {

@@ -1,11 +1,9 @@
 import * as vscode from 'vscode';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { SkillMeta } from '../utils/skillScanner.js';
-import type { TemplateBlock } from '../utils/templateGenerator.js';
 
 export interface TemplateBuilderPanelOptions {
-  htmlFilePath: string;   // absolute path to public/template-builder.html
+  htmlFilePath: string;   // absolute path to public/template-builder-vscode.html
   onGenerate: (markdown: string) => Promise<void>;
   onInsert: (markdown: string) => Promise<void>;
   onCopy: (markdown: string) => Promise<void>;
@@ -13,7 +11,7 @@ export interface TemplateBuilderPanelOptions {
 
 /**
  * Creates the Template Builder WebviewPanel by loading the shared
- * `public/template-builder.html` file and injecting a nonce-based
+ * `public/template-builder-vscode.html` file and injecting a nonce-based
  * Content-Security-Policy + VS Code bridge.
  *
  * The HTML file is shared between the browser (npm start) and VS Code,
@@ -40,6 +38,14 @@ export async function createTemplateBuilderPanel(
   let html = await fs.readFile(options.htmlFilePath, 'utf8');
   const nonce = getNonce();
   html = patchHtmlForWebview(html, nonce, panel.webview, publicDirUri);
+
+  // Inject document.css inline so Shadow DOM preview can use it without external fetch
+  const docCssPath = path.join(path.dirname(options.htmlFilePath), 'document.css');
+  let docCss = '';
+  try { docCss = await fs.readFile(docCssPath, 'utf8'); } catch { /* optional */ }
+  const docCssScript = `<script nonce="${nonce}">window.__MPS_DOC_CSS__ = ${JSON.stringify(docCss)};</script>`;
+  html = html.replace('</head>', `${docCssScript}\n</head>`);
+
   panel.webview.html = html;
 
   panel.webview.onDidReceiveMessage(
@@ -95,8 +101,11 @@ function patchHtmlForWebview(
   // Example: import { ... } from '/core/snippets.js' -> import { ... } from 'vscode-webview://.../core/snippets.js'
   html = html.replace(/(['"])\/(core|document\.css)/g, `$1${webviewPublicUri}/$2`);
 
-  // Insert CSP after <head>
-  html = html.replace(/(<head[^>]*>)/i, `$1\n  ${cspTag}`);
+  // Inject webview public URI as a global JS variable so dynamic srcdoc builders can use it
+  const publicUriScript = `<script nonce="${nonce}">window.__MPS_PUBLIC_URI__ = ${JSON.stringify(webviewPublicUri)};</script>`;
+
+  // Insert CSP and public URI script after <head>
+  html = html.replace(/(<head[^>]*>)/i, `$1\n  ${cspTag}\n  ${publicUriScript}`);
 
   // Add nonce to all inline <script> tags
   html = html.replace(/<script(?!\s+src)(?!\s+nonce)([\s>])/gi, `<script nonce="${nonce}"$1`);

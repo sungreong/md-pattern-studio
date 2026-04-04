@@ -22,15 +22,15 @@
     "commands": [
       {
         "command": "mdStudioPreview.open",
-        "title": "Markdown Studio: Open Preview"
+        "title": "MD Studio: Preview"
       },
       {
         "command": "mdStudioPreview.refresh",
-        "title": "Markdown Studio: Refresh Preview"
+        "title": "MD Studio: Refresh"
       },
       {
         "command": "mdStudioPreview.openTemplateBuilder",
-        "title": "Markdown Studio: Open Template Builder",
+        "title": "Template Builder",
         "icon": "$(combine)"
       }
     ],
@@ -114,12 +114,12 @@
   },
   "files": [
     "dist/**",
-    "README.md",
+    "readme.md",
     "EXTENSION_GUIDE.md",
     "scripts/md-to-html.mjs",
     "public/core/**",
     "public/document.css",
-    "public/template-builder.html"
+    "public/template-builder-vscode.html"
   ],
   "devDependencies": {
     "@types/node": "^20.17.24",
