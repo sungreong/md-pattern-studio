@@ -25,6 +25,7 @@ http://localhost:3188
 - CLI 변환(`npm run md2html -- ...`)
 - Mermaid 렌더링 지원
 - standalone HTML 아웃라인/코드 복사 버튼 지원
+- **Template Builder**: 웹 UI에서 섹션 템플릿을 시각적으로 선택·삽입하는 보조 패널
 
 ## 화면 구성과 사용 방법
 
@@ -102,6 +103,14 @@ tocDepth: 3
 
 `page-break`가 2개 이상이면 앱/standalone HTML에서 Slides 탐색(Prev/Next, 키보드) 모드를 사용할 수 있습니다.
 
+## Template Builder
+
+웹 UI 우측 상단의 `Template Builder` 버튼(또는 VS Code Extension 내 패널)을 열면, 섹션 템플릿을 시각적으로 선택해 에디터에 바로 삽입할 수 있습니다.
+
+- 커버, 두 컬럼, 세 컬럼, Stats, 카드 등 주요 템플릿을 버튼 클릭으로 삽입
+- 삽입 위치는 현재 커서 기준 섹션 직후로 자동 설정
+- VS Code Extension에서는 Webview 내 패널로 제공되며 저장 시 에디터에 반영
+
 ## CLI: Markdown -> HTML
 
 ```bash
@@ -152,6 +161,8 @@ npm run md2html -- test/notes.md --out test/notes.cli.html --theme report --stan
 - Markdown 저장 시 자동 갱신 (`mdStudioPreview.autoOnSave=true`)
 - Markdown 저장(`Ctrl+S`) 시 커서 기준 섹션으로 Preview 동기화 (`mdStudioPreview.cursorSyncOnSave=true`)
 - `file://` 자산 링크를 Webview URI로 변환
+- **워크스페이스 외부 파일 지원**: 현재 워크스페이스에 없는 `.md` 파일도 번들 CLI로 바로 미리보기 가능
+- **반응형 레이아웃**: Webview 패널이 좁아도 슬라이드·Outline이 실제 너비에 맞게 자동 조정
 
 설정:
 
@@ -162,6 +173,7 @@ npm run md2html -- test/notes.md --out test/notes.cli.html --theme report --stan
 - `mdStudioPreview.extraArgs` (기본값 `["--standalone"]`)
 
 기본 경로가 현재 워크스페이스에 없으면, 확장 내부에 번들된 CLI로 자동 fallback 후 렌더링합니다.
+워크스페이스 외부 파일도 동일하게 번들 CLI를 사용하며, `mdStudioPreview.cliScriptPath`에 절대 경로를 지정해 오버라이드할 수 있습니다.
 
 패키징:
 
@@ -175,7 +187,7 @@ npm run package:vsix
 설치:
 
 ```bash
-code --install-extension .\markdown-pattern-studio-preview-0.1.4.vsix
+code --install-extension .\markdown-pattern-studio-preview-0.1.6.vsix
 ```
 
 ### 커서 동기화 동작 (Ctrl+S)
