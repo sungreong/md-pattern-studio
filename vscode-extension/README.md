@@ -6,6 +6,7 @@ This extension runs the repository CLI (`scripts/md-to-html.mjs`) and opens the 
 
 - `Markdown Studio: Open Preview` command
 - `Markdown Studio: Refresh Preview` command
+- `MD Studio: Transform Markdown to Styled HTML` command (export the currently open `.md` to styled `.html`)
 - Auto refresh on markdown save (`mdStudioPreview.autoOnSave`)
 - Outline collapsed/expanded state is remembered per document
 - File URI rewrite (`file://...`) to webview-safe resource URIs
@@ -18,7 +19,7 @@ This extension runs the repository CLI (`scripts/md-to-html.mjs`) and opens the 
 - `mdStudioPreview.cursorSyncOnSave` (default: `true`)
 - `mdStudioPreview.nodePath` (default: `"node"`)
 - `mdStudioPreview.cliScriptPath` (default: `"scripts/md-to-html.mjs"`)
-- `mdStudioPreview.preferredViewMode` (default: `"auto"`, values: `"auto" | "slides" | "stack"`)
+- `mdStudioPreview.preferredViewMode` (default: `"stack"`, values: `"auto" | "slides" | "stack"`)
 - `mdStudioPreview.extraArgs` (default: `["--standalone"]`)
 
 Default behavior:
@@ -28,7 +29,7 @@ Default behavior:
 3. If still missing, show `Select Script` picker and save selected path to user settings.
 4. If `mdStudioPreview.cliScriptPath` is explicitly customized, that path is prioritized (no automatic bundled fallback override).
 5. **Outside workspace**: bundled CLI is used automatically. Set `mdStudioPreview.cliScriptPath` to an absolute path to override.
-6. View mode: `preferredViewMode=auto` switches to Stack on narrow webview panels to avoid tiny slide scaling.
+6. View mode: default `preferredViewMode=stack` matches the web editor, and `auto` switches to Stack on narrow webview panels.
 7. Slide scale is calculated from the actual outline panel width, so it no longer clips on narrow panels.
 8. Outline panel remembers the last collapsed/expanded state for each markdown document.
 9. Cursor-sync parser also falls back to bundled `public/core/engine.js` when workspace parser is missing.

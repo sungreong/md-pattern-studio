@@ -25,6 +25,7 @@ code --install-extension .\markdown-pattern-studio-preview-0.1.4.vsix --force
 2. Run `Markdown Studio: Open Preview` from Command Palette (`Ctrl+Shift+P`).
 3. Save the file (`Ctrl+S`) to auto-refresh preview.
 4. Use `Markdown Studio: Refresh Preview` for manual force refresh.
+5. Use `MD Studio: Transform Markdown to Styled HTML` to export the currently open markdown file as styled HTML.
 
 ## 2) Cursor Sync on Save (Ctrl+S)
 
@@ -66,7 +67,7 @@ Notes:
   - `auto`: switch to stack on narrow webview.
   - `slides`: always prefer slides.
   - `stack`: always prefer stack.
-  - Default: `"auto"`
+  - Default: `"stack"`
 
 Outline state:
 
