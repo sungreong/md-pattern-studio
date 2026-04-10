@@ -13,6 +13,25 @@ This extension runs the repository CLI (`scripts/md-to-html.mjs`) and opens the 
 - **Preview works outside the current workspace** — any `.md` file can be previewed using the bundled CLI
 - **Responsive layout** — slide scale and outline panel adapt to the webview panel width
 
+### Markdown File Browser (Activity Bar)
+
+A dedicated sidebar for navigating markdown files as a reader:
+
+- **Book icon** in the Activity Bar lists all `*.md` files in the workspace as a folder tree
+- **Click** a file → opens it in the preview panel (single reader panel, previous panel closes)
+- **Right-click → Open in New Panel** → opens in a new panel while keeping existing ones open
+- **Search icon** (🔍) in the sidebar title bar → QuickPick search by filename and path
+- **Collapse All** button to reset the folder tree
+- Tree auto-refreshes when `.md` files are added or deleted (300 ms debounce)
+- Sidebar selection syncs automatically when the preview changes via `Ctrl+S`
+
+### In-Reader Text Search
+
+- Press `Ctrl+F` inside the preview webview to open a floating search bar
+- Matches are highlighted in real time as you type
+- `↑` / `↓` buttons (or `Shift+Enter` / `Enter`) to cycle through results with match count
+- `Escape` closes the bar and clears highlights
+
 ## Settings
 
 - `mdStudioPreview.autoOnSave` (default: `true`)

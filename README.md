@@ -150,7 +150,7 @@ npm run md2html -- test/notes.md --out test/notes.cli.html --theme report --stan
 
 사용 흐름:
 
-1. VS Code에서 Markdown 파일을 연 뒤 `Markdown Studio: Open Preview` 실행
+1. VS Code에서 Markdown 파일을 연 뒤 `Markdown Studio: Open Preview` 실행 (또는 Activity Bar의 책 아이콘 클릭)
 2. 문서를 수정하고 저장(`Ctrl+S`)하면 자동 렌더링/갱신
 3. 우측 Outline에서 섹션 이동, 하단 `Prev/Next`로 페이지 이동, `Stack`으로 문서형 보기 전환
 
@@ -163,6 +163,21 @@ npm run md2html -- test/notes.md --out test/notes.cli.html --theme report --stan
 - `file://` 자산 링크를 Webview URI로 변환
 - **워크스페이스 외부 파일 지원**: 현재 워크스페이스에 없는 `.md` 파일도 번들 CLI로 바로 미리보기 가능
 - **반응형 레이아웃**: Webview 패널이 좁아도 슬라이드·Outline이 실제 너비에 맞게 자동 조정
+
+### Markdown File Browser (Activity Bar)
+
+- Activity Bar의 **책 아이콘**을 클릭하면 워크스페이스의 모든 `.md` 파일이 폴더 트리로 표시됨
+- **파일 클릭** → 단일 Reader 패널에서 즉시 미리보기 (이전 패널 자동 교체)
+- **우클릭 → Open in New Panel** → 기존 패널 유지하며 새 패널로 열기 (여러 파일 동시 비교)
+- **검색 아이콘(🔍)** → 파일명·경로 기준 QuickPick 검색
+- 파일 추가/삭제 시 트리 자동 갱신 (300ms 디바운스)
+- `Ctrl+S` 저장 시 사이드바 선택이 현재 프리뷰 파일로 자동 동기화
+
+### Reader 내부 텍스트 검색
+
+- 프리뷰 Webview에서 `Ctrl+F` → 우측 상단에 검색 바 등장
+- 실시간 하이라이트 + `↑`/`↓` 또는 `Enter`/`Shift+Enter`로 결과 순환
+- `Escape`로 닫기 및 하이라이트 제거
 
 설정:
 
