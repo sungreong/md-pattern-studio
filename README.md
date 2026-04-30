@@ -26,6 +26,7 @@ http://localhost:3188
 - 페이지 분리(`{: .page-break}`) 기반 Slides 모드
 - CLI 변환(`npm run md2html -- ...`)
 - Mermaid 렌더링 지원
+- standalone HTML의 로컬 이미지 자동 Base64 내장 및 누락 이미지 fallback
 - standalone HTML 아웃라인/코드 복사 버튼 지원
 - **Template Builder**: 웹 UI에서 섹션 템플릿을 시각적으로 선택·삽입하는 보조 패널
 
@@ -138,9 +139,16 @@ npm run md2html -- test/notes.md --out test/notes.cli.html --theme report --stan
 - `--mode`: 렌더 모드 (`web` 등)
 - `--standalone` / `--no-standalone`: standalone HTML 셸 포함 여부
 - `--base-dir <path>`: 상대 경로 자산 해석 기준 디렉터리
+- `--embed-local-images` / `--no-embed-local-images`: 로컬 이미지를 HTML에 Base64로 내장할지 여부. standalone 출력은 기본적으로 내장합니다.
 - `--mermaid` / `--no-mermaid`: Mermaid 강제 on/off
 
-참고: 브라우저 보안 정책 때문에 `MD 열기`에서 파일의 실제 절대 경로를 제공하지 않는 환경이 있습니다. 이 경우 앱 미리보기는 원본 상대경로를 유지하고, CLI(`--base-dir`)를 사용하면 경로 해석을 강제할 수 있습니다.
+참고: 브라우저 보안 정책 때문에 `MD 열기`에서 파일의 실제 절대 경로를 제공하지 않는 환경이 있습니다. 이 경우 앱 미리보기는 원본 상대경로를 유지하고, CLI(`--base-dir`)를 사용하면 경로 해석을 강제할 수 있습니다. standalone CLI 출력은 로컬 이미지를 기본적으로 Base64로 내장하므로 HTML 파일만 옮겨도 이미지가 유지됩니다. 단, 큰 이미지는 HTML 파일 크기를 크게 만들 수 있고, 원격 이미지는 URL을 그대로 유지합니다. 로컬 이미지를 찾지 못하면 변환 품질 안내와 이미지 fallback 영역을 표시합니다.
+
+로컬 이미지 내장 동작 검증:
+
+```bash
+npm run test:embed-images
+```
 
 ## VS Code Extension: CLI Preview
 

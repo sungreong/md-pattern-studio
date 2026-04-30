@@ -28,7 +28,7 @@ const EMAIL_DISCLAIMER_CONFIRM_RE =
 
 function printUsage() {
   console.log(`Usage:
-  node scripts/md-to-html.mjs <input.md> [--out output.html] [--theme report] [--mode web] [--standalone] [--base-dir path] [--strip-email-disclaimer] [--mermaid|--no-mermaid]
+  node scripts/md-to-html.mjs <input.md> [--out output.html] [--theme report] [--mode web] [--standalone] [--base-dir path] [--embed-local-images|--no-embed-local-images] [--strip-email-disclaimer] [--mermaid|--no-mermaid]
 
 Examples:
   node scripts/md-to-html.mjs test/notes.md
@@ -45,6 +45,7 @@ function parseArgs(argv) {
     standalone: true,
     baseDir: '',
     mermaid: null,
+    embedLocalImages: null,
     stripEmailDisclaimer: false,
   };
 
@@ -82,6 +83,14 @@ function parseArgs(argv) {
     }
     if (token === '--strip-email-disclaimer') {
       result.stripEmailDisclaimer = true;
+      continue;
+    }
+    if (token === '--embed-local-images') {
+      result.embedLocalImages = true;
+      continue;
+    }
+    if (token === '--no-embed-local-images') {
+      result.embedLocalImages = false;
       continue;
     }
     if (token === '--mermaid') {
@@ -245,6 +254,108 @@ function prepareSourceForRender(source = '', options = {}) {
 function isAbsoluteAssetPath(value = '') {
   const text = String(value || '').trim();
   return /^(https?:|data:|blob:|file:)/i.test(text) || text.startsWith('/') || /^[A-Za-z]:[\\/]/.test(text);
+}
+
+function isSkippedInlineAssetPath(value = '') {
+  return /^(https?:|data:|blob:)/i.test(String(value || '').trim());
+}
+
+function decodeHtmlAttribute(value = '') {
+  return String(value || '')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+function escapeHtmlText(value = '') {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getImageMimeType(filePath = '') {
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeTypes = new Map([
+    ['.png', 'image/png'],
+    ['.jpg', 'image/jpeg'],
+    ['.jpeg', 'image/jpeg'],
+    ['.gif', 'image/gif'],
+    ['.webp', 'image/webp'],
+    ['.svg', 'image/svg+xml'],
+    ['.bmp', 'image/bmp'],
+    ['.ico', 'image/x-icon'],
+  ]);
+  return mimeTypes.get(ext) || 'application/octet-stream';
+}
+
+function resolveLocalImageFilePath(src = '', baseDir = '') {
+  const value = decodeHtmlAttribute(src).trim();
+  if (!value || isSkippedInlineAssetPath(value)) return null;
+  if (/^file:/i.test(value)) {
+    try {
+      return fileURLToPath(value);
+    } catch {
+      return null;
+    }
+  }
+  if (/^[A-Za-z]:[\\/]/.test(value) || path.isAbsolute(value)) {
+    return value;
+  }
+  if (!baseDir || value.startsWith('/')) return null;
+  return path.resolve(baseDir, value);
+}
+
+async function inlineLocalImages(renderedHtml = '', options = {}) {
+  if (!options.embedLocalImages) return { html: renderedHtml, warnings: [] };
+
+  const source = String(renderedHtml || '');
+  const imageSrcRe = /<img\b[^>]*\bsrc=(["'])(.*?)\1[^>]*>/gi;
+  const warnings = [];
+  const warningKeys = new Set();
+  const chunks = [];
+  let lastIndex = 0;
+
+  const addWarning = (src, detail) => {
+    const key = `${src}::${detail}`;
+    if (warningKeys.has(key)) return;
+    warningKeys.add(key);
+    warnings.push(`이미지 내장 실패: ${src}${detail ? ` (${detail})` : ''}`);
+  };
+
+  for (let match = imageSrcRe.exec(source); match; match = imageSrcRe.exec(source)) {
+    const [tag, quote, rawSrc] = match;
+    chunks.push(source.slice(lastIndex, match.index));
+    lastIndex = match.index + tag.length;
+
+    const localPath = resolveLocalImageFilePath(rawSrc, options.baseDir);
+    if (!localPath) {
+      chunks.push(tag);
+      continue;
+    }
+
+    try {
+      const buffer = await fs.readFile(localPath);
+      const mimeType = getImageMimeType(localPath);
+      const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`;
+      chunks.push(tag.replace(`src=${quote}${rawSrc}${quote}`, `src=${quote}${dataUrl}${quote}`));
+    } catch (error) {
+      addWarning(rawSrc, error?.code || error?.message || 'read-failed');
+      const failedTag = tag.includes('data-src-resolve-error=')
+        ? tag
+        : tag.replace(/<img\b/i, '<img data-src-resolve-error="true"');
+      chunks.push(
+        `${failedTag}<div class="md-image-fallback" role="note">이미지를 불러올 수 없습니다.<span>${escapeHtmlText(rawSrc)}</span></div>`,
+      );
+    }
+  }
+
+  chunks.push(source.slice(lastIndex));
+  return { html: chunks.join(''), warnings };
 }
 
 function createNodeAssetResolver(baseDir = '') {
@@ -446,6 +557,7 @@ async function main() {
   const sourceBaseDir = args.baseDir ? path.resolve(process.cwd(), args.baseDir) : path.dirname(inputPath);
   const enableMermaid = args.mermaid == null ? Boolean(args.standalone) : Boolean(args.mermaid);
   const enableCodeCopy = Boolean(args.standalone);
+  const embedLocalImages = args.embedLocalImages == null ? Boolean(args.standalone) : Boolean(args.embedLocalImages);
 
   const readResult = await readInputMarkdown(inputPath);
   const prepared = prepareSourceForRender(readResult.source, {
@@ -459,7 +571,7 @@ async function main() {
   const registry = new TemplateRegistry();
   registerBuiltInTemplates(registry);
 
-  const { model, html } = buildRenderedHtml(
+  const { model, html: renderedHtml } = buildRenderedHtml(
     source,
     {
       theme: args.theme,
@@ -470,6 +582,12 @@ async function main() {
     },
     registry,
   );
+  const inlined = await inlineLocalImages(renderedHtml, {
+    baseDir: sourceBaseDir,
+    embedLocalImages,
+  });
+  const html = inlined.html;
+  exportWarnings.push(...inlined.warnings);
 
   let output = html;
   if (args.standalone) {

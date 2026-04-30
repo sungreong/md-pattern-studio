@@ -13,6 +13,7 @@ This extension runs the repository CLI (`scripts/md-to-html.mjs`) and opens the 
 - File URI rewrite (`file://...`) to webview-safe resource URIs
 - **Preview works outside the current workspace** — any `.md` file can be previewed using the bundled CLI
 - **Responsive layout** — slide scale and outline panel adapt to the webview panel width
+- Standalone CLI exports embed local images by default, so generated HTML can be moved without losing relative-path images. Add `--no-embed-local-images` to `mdStudioPreview.extraArgs` to keep file-based image links.
 
 ### Markdown File Browser (Activity Bar)
 

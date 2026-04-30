@@ -6,7 +6,8 @@
   "description": "Markdown-first live preview studio with CodeMirror editor and pattern-based HTML rendering",
   "scripts": {
     "start": "node server.js",
-    "md2html": "node scripts/md-to-html.mjs"
+    "md2html": "node scripts/md-to-html.mjs",
+    "test:embed-images": "node test/embed-local-images.mjs"
   },
   "engines": {
     "node": ">=18"

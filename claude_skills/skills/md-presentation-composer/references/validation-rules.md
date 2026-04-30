@@ -63,6 +63,9 @@
 ## Export 안정화 규칙 (추가)
 
 - 이미지 상대경로는 입력 MD 기준 디렉토리를 우선 사용
+- standalone CLI 출력은 로컬 상대경로/절대경로/file URL 이미지를 Base64로 내장하는 것을 기본값으로 본다. 공유용 HTML에서는 `--no-embed-local-images`를 쓰지 않는다.
+- 로컬 이미지 파일이 없거나 읽기 실패하면 변환은 중단하지 않고, 원본 `src` 유지 + `data-src-resolve-error="true"` + 이미지 fallback 영역 + 변환 품질 안내를 남긴다.
+- 원격 이미지(`http`, `https`)와 이미 내장된 `data:` 이미지는 원본 URL을 유지한다.
 - Mermaid는 렌더 시도 후 실패 시 원문 fallback 유지
 - 저장 HTML에는 우측 outline + current indicator를 포함
 - 코드 블록 복사 버튼은 앱/standalone에서 동작하고 no-standalone에서는 비활성(또는 미노출)이어야 함

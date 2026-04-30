@@ -587,6 +587,31 @@
   background: var(--doc-bg-soft);
 }
 
+.md-figure img[data-src-resolve-error="true"] {
+  display: none;
+}
+
+.md-image-fallback {
+  display: grid;
+  gap: 8px;
+  min-height: 180px;
+  place-items: center;
+  padding: 28px;
+  background: var(--doc-bg-soft);
+  color: var(--doc-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.md-image-fallback span {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-family: var(--doc-font-mono);
+  font-size: 12px;
+}
+
 .md-figure figcaption {
   padding: 12px 14px;
   background: var(--doc-bg-soft);
