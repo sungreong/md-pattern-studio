@@ -2,7 +2,7 @@
   "name": "markdown-pattern-studio-preview",
   "displayName": "Markdown Pattern Studio Preview",
   "description": "Preview Markdown Pattern Studio CLI output in a VS Code webview.",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "publisher": "local",
   "repository": {
     "type": "git",
@@ -135,6 +135,11 @@
           ],
           "description": "Additional CLI arguments appended after --base-dir."
         },
+        "mdStudioPreview.stripEmailDisclaimer": {
+          "type": "boolean",
+          "default": false,
+          "description": "Remove common corporate email footer/disclaimer text before rendering markdown to HTML."
+        },
         "mdStudioPreview.skillsDir": {
           "type": "string",
           "default": "claude_skills/skills",
@@ -192,6 +197,11 @@
           "command": "mdStudioPreview.openFileInNewPanel",
           "when": "view == mdStudioFileBrowser && viewItem == mdFile",
           "group": "navigation@1"
+        },
+        {
+          "command": "mdStudioPreview.transformMarkdownToHtml",
+          "when": "view == mdStudioFileBrowser && viewItem == mdFile",
+          "group": "navigation@2"
         }
       ],
       "explorer/context": [

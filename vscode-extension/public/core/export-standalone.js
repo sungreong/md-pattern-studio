@@ -622,7 +622,7 @@ export function buildStandaloneHtmlDocument({
   const warningHtml = warningItems.length
     ? `
 <aside class="export-warning" role="status" aria-live="polite">
-  <strong>이미지 경로 안내</strong>
+  <strong>변환 품질 안내</strong>
   <ul>${warningItems.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
 </aside>`
     : '';

@@ -16,6 +16,7 @@ interface ExtensionConfig {
   cliScriptPath: string;
   preferredViewMode: 'auto' | 'slides' | 'stack';
   extraArgs: string[];
+  stripEmailDisclaimer: boolean;
 }
 
 interface PreviewSession {
@@ -256,7 +257,8 @@ function readConfig(): ExtensionConfig {
   const rawPreferredViewMode = String(config.get<string>('preferredViewMode', 'stack') || 'stack').trim().toLowerCase();
   const preferredViewMode: 'auto' | 'slides' | 'stack' =
     rawPreferredViewMode === 'slides' || rawPreferredViewMode === 'stack' ? rawPreferredViewMode : 'auto';
-  return { autoOnSave, cursorSyncOnSave, nodePath, cliScriptPath, preferredViewMode, extraArgs };
+  const stripEmailDisclaimer = config.get<boolean>('stripEmailDisclaimer', false);
+  return { autoOnSave, cursorSyncOnSave, nodePath, cliScriptPath, preferredViewMode, extraArgs, stripEmailDisclaimer };
 }
 
 async function transformMarkdownToHtml(commandArg?: unknown): Promise<void> {
@@ -596,6 +598,9 @@ async function runCliRendererForPath(inputPath: string, options: RunCliRendererO
 
   const cwd = workspaceFolder ? workspaceFolder.uri.fsPath : inputDir;
   const extraArgs = normalizeRendererExtraArgs(config.extraArgs, Boolean(options.forceStandalone));
+  if (config.stripEmailDisclaimer && !extraArgs.includes('--strip-email-disclaimer')) {
+    extraArgs.push('--strip-email-disclaimer');
+  }
   const args = [scriptPath, inputPath, '--out', outputPath, '--base-dir', inputDir, ...extraArgs];
   await spawnProcess(config.nodePath, args, cwd);
 
