@@ -2,7 +2,7 @@
   "name": "markdown-pattern-studio-preview",
   "displayName": "Markdown Pattern Studio Preview",
   "description": "Preview Markdown Pattern Studio CLI output in a VS Code webview.",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "publisher": "local",
   "repository": {
     "type": "git",
@@ -23,6 +23,7 @@
     "onCommand:mdStudioPreview.openFileInViewer",
     "onCommand:mdStudioPreview.openFileInNewPanel",
     "onCommand:mdStudioPreview.transformMarkdownToHtml",
+    "onCommand:mdStudioPreview.downloadSkillFolder",
     "onCommand:mdStudioPreview.diagnoseEnvironment",
     "onCommand:mdStudioFileBrowser.refresh",
     "onCommand:mdStudioFileBrowser.search"
@@ -60,6 +61,11 @@
         "command": "mdStudioPreview.openTemplateBuilder",
         "title": "Template Builder",
         "icon": "$(combine)"
+      },
+      {
+        "command": "mdStudioPreview.downloadSkillFolder",
+        "title": "MD Studio: Download Skill Folder",
+        "icon": "$(cloud-download)"
       },
       {
         "command": "mdStudioPreview.diagnoseEnvironment",
@@ -163,6 +169,11 @@
           "command": "mdStudioFileBrowser.refresh",
           "when": "view == mdStudioFileBrowser",
           "group": "navigation@2"
+        },
+        {
+          "command": "mdStudioPreview.downloadSkillFolder",
+          "when": "view == mdStudioFileBrowser",
+          "group": "navigation@3"
         }
       ],
       "editor/title": [
@@ -226,6 +237,9 @@
     "README.md",
     "LICENSE.md",
     "EXTENSION_GUIDE.md",
+    "ai_skills/**",
+    "node_modules/yazl/**",
+    "node_modules/buffer-crc32/**",
     "scripts/md-to-html.mjs",
     "public/core/**",
     "public/document.css",
@@ -236,5 +250,8 @@
     "@types/vscode": "^1.95.0",
     "@vscode/vsce": "^3.6.2",
     "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "yazl": "^2.5.1"
   }
 }

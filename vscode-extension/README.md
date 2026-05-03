@@ -8,6 +8,7 @@ This extension runs the repository CLI (`scripts/md-to-html.mjs`) and opens the 
 - `Markdown Studio: Refresh Preview` command
 - `MD Studio: Open in Viewer` command safely opens the selected tree item or the active markdown document
 - `MD Studio: Transform Markdown to Styled HTML` command (export the currently open `.md` to styled `.html`)
+- `MD Studio: Download Skill Folder` command exports bundled or workspace skills as ready-to-share `.zip` files
 - Auto refresh on markdown save (`mdStudioPreview.autoOnSave`)
 - Outline collapsed/expanded state is remembered per document
 - File URI rewrite (`file://...`) to webview-safe resource URIs
@@ -24,9 +25,18 @@ A dedicated sidebar for navigating markdown files as a reader:
 - **Right-click → Open in New Panel** → opens in a new panel while keeping existing ones open
 - **Command Palette → MD Studio: Open in Viewer** → opens the active markdown file, or shows a clear message when no markdown target is available
 - **Search icon** (🔍) in the sidebar title bar → QuickPick search by filename and path
+- **Download icon** in the sidebar title bar → choose a bundled/workspace skill and save it as a ZIP folder
 - **Collapse All** button to reset the folder tree
 - Tree auto-refreshes when `.md` files are added or deleted (300 ms debounce)
 - Sidebar selection syncs automatically when the preview changes via `Ctrl+S`
+
+### Skill Folder Download
+
+Use `MD Studio: Download Skill Folder` from the Command Palette or Markdown Files sidebar title bar.
+
+1. Choose one source: bundled Claude, Agents, Codex, or the configured workspace `mdStudioPreview.skillsDir`.
+2. Choose a skill folder that contains `SKILL.md`.
+3. Save the generated ZIP. The archive keeps the skill folder as the root, so it extracts as `md-presentation-composer/SKILL.md` plus its references.
 
 ### In-Reader Text Search
 
@@ -82,5 +92,5 @@ npm run package:vsix
 Then install:
 
 ```bash
-code --install-extension .\markdown-pattern-studio-preview-0.1.9.vsix
+code --install-extension .\markdown-pattern-studio-preview-0.1.10.vsix
 ```

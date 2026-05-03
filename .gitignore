@@ -19,6 +19,7 @@ coverage/
 .cache/
 .tmp/
 tmp/
+vscode-extension/ai_skills/
 *.vsix
 
 # OS / editor metadata

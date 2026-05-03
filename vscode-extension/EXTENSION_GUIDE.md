@@ -16,7 +16,7 @@ npm run package:vsix
 ### Install
 
 ```bash
-code --install-extension .\markdown-pattern-studio-preview-0.1.9.vsix --force
+code --install-extension .\markdown-pattern-studio-preview-0.1.10.vsix --force
 ```
 
 ### Basic Usage
@@ -27,6 +27,7 @@ code --install-extension .\markdown-pattern-studio-preview-0.1.9.vsix --force
 4. Use `Markdown Studio: Refresh Preview` for manual force refresh.
 5. Use `MD Studio: Transform Markdown to Styled HTML` to export the currently open markdown file as styled HTML.
 6. Use `MD Studio: Open in Viewer` from the Markdown Files sidebar or Command Palette. From the palette it falls back to the active markdown document and shows a clear message if no markdown target is available.
+7. Use `MD Studio: Download Skill Folder` to export bundled or workspace skills as ready-to-share ZIP folders.
 
 ## 2) Cursor Sync on Save (Ctrl+S)
 
@@ -75,7 +76,22 @@ Outline state:
 - Outline hide/show state is remembered per markdown document.
 - Default for new documents is expanded (open).
 
-## 4) Runtime Flow
+## 4) Skill Folder Download
+
+`MD Studio: Download Skill Folder` is available from the Command Palette and the Markdown Files sidebar title bar.
+
+1. Choose a source:
+   - `Bundled Claude`
+   - `Bundled Agents`
+   - `Bundled Codex`
+   - `Workspace configured skillsDir`
+2. Choose a skill folder. Only folders with a root `SKILL.md` are exportable.
+3. Pick a save location. The output archive is named `{skill-id}.zip` by default.
+4. Extract the ZIP where your AI tool expects skills. The ZIP keeps the skill folder at the archive root.
+
+Bundled skills are copied into the VSIX during `npm run build`, so installed users can export them without cloning the repository.
+
+## 5) Runtime Flow
 
 1. Extension receives preview command or save event.
 2. Resolves CLI path in this order:
@@ -89,7 +105,7 @@ Outline state:
 5. Rewrites `file://` asset URLs with `webview.asWebviewUri(...)`.
 6. Injects bridge script (cursor sync, preferred mode, outline state persistence).
 
-## 5) Troubleshooting
+## 6) Troubleshooting
 
 ### Preview does not open
 
@@ -111,23 +127,28 @@ Example (absolute path):
 
 ### Outline keeps reopening
 
-- Update to the latest extension (`0.1.9` or newer).
+- Update to the latest extension (`0.1.10` or newer).
 - Hide once; subsequent refresh/save should preserve collapsed state for that document.
 
 ### `Open in Viewer` command shows an error
 
-- Update to `0.1.9` or newer.
+- Update to `0.1.10` or newer.
 - The command now validates command arguments before opening a file.
 - If no file is passed by VS Code, it uses the active markdown document instead of failing on an undefined URI.
 
-## 6) Development Notes
+### Skill download has no sources
+
+- Run `npm run build` before testing from source so bundled `ai_skills` are copied into `vscode-extension/ai_skills`.
+- Confirm `mdStudioPreview.skillsDir` points to a directory whose children contain `SKILL.md`.
+
+## 7) Development Notes
 
 - Source: `vscode-extension/src/extension.ts`
 - Build: `npm run build`
 - Package: `npm run package:vsix`
-- Install test: `code --install-extension .\markdown-pattern-studio-preview-0.1.9.vsix --force`
+- Install test: `code --install-extension .\markdown-pattern-studio-preview-0.1.10.vsix --force`
 
-## 7) Uninstall / Cleanup Guide
+## 8) Uninstall / Cleanup Guide
 
 ### Uninstall extension
 
@@ -148,7 +169,7 @@ Find `local.markdown-pattern-studio-preview@...` in the list.
 If you no longer need the package file, delete:
 
 ```text
-vscode-extension/markdown-pattern-studio-preview-0.1.9.vsix
+vscode-extension/markdown-pattern-studio-preview-0.1.10.vsix
 ```
 
 ### Optional: remove local extension folder manually
@@ -156,5 +177,5 @@ vscode-extension/markdown-pattern-studio-preview-0.1.9.vsix
 If needed, remove this folder:
 
 ```text
-%USERPROFILE%\.vscode\extensions\local.markdown-pattern-studio-preview-0.1.9
+%USERPROFILE%\.vscode\extensions\local.markdown-pattern-studio-preview-0.1.10
 ```

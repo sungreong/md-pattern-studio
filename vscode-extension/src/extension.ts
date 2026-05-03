@@ -4,6 +4,7 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { downloadSkillFolderCommand } from './commands/exportSkillFolder.js';
 import { openTemplateBuilderCommand } from './commands/templateBuilder.js';
 import { MarkdownFileBrowserProvider, MarkdownFileItem } from './providers/markdownFileTreeProvider.js';
 
@@ -130,6 +131,12 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('mdStudioPreview.openTemplateBuilder', async () => {
       await openTemplateBuilderCommand(context);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('mdStudioPreview.downloadSkillFolder', async () => {
+      await downloadSkillFolderCommand(context);
     }),
   );
 
