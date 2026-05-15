@@ -244,11 +244,23 @@ npm run test:embed-images
 
 이 화면은 VS Code에서 Markdown을 저장했을 때, 확장이 CLI 렌더링 결과를 Webview로 보여주고 Outline/페이지 네비게이션을 제공하는 상태입니다.
 
+### 최근 VS Code Extension 업데이트 (2026-05-16)
+
+`db030df` 이후 확장 쪽 변경을 기준으로 정리했습니다.
+
+- **Markdown File Browser 고도화**: 정렬, 필터, Pinned, Recent, 숨김 항목 관리, 경로/이름 복사 메뉴 추가
+- **짧은 메타데이터 표시**: `방금`, `12분전`, `8KB`, `240줄`처럼 트리 폭을 덜 차지하는 표시로 변경
+- **문서 탐색 보조 정보**: H1 제목 tooltip, 폴더 문서 수/최근/오래됨 요약, 가능한 경우 Git 상태 배지 표시
+- **Viewer 반응형 개선**: 좁은 패널에서 Outline과 문서 폭이 겹치지 않도록 Slide/Stack 레이아웃 재계산
+- **Zoom/Fit 개선**: Slide/Stack 모두 `+/-`는 5% 단위, `Fit`은 남는 공간이 있으면 100%를 넘어 확대 가능
+- **구조화 리팩터링**: 파일 브라우저 등록, TreeItem, Git 상태, Webview 보강 로직을 별도 모듈로 분리해 주요 소스 파일을 1000줄 미만으로 유지
+
 사용 흐름:
 
 1. VS Code에서 Markdown 파일을 연 뒤 `Markdown Studio: Open Preview` 실행 (또는 Activity Bar의 책 아이콘 클릭)
 2. 문서를 수정하고 저장(`Ctrl+S`)하면 자동 렌더링/갱신
 3. 우측 Outline에서 섹션 이동, 하단 `Prev/Next`로 페이지 이동, `Stack`으로 문서형 보기 전환
+4. `Fit`, `+`, `-` 버튼으로 현재 패널 크기에 맞춰 Slide/Stack 배율 조정
 
 주요 동작:
 
@@ -259,15 +271,22 @@ npm run test:embed-images
 - `file://` 자산 링크를 Webview URI로 변환
 - **워크스페이스 외부 파일 지원**: 현재 워크스페이스에 없는 `.md` 파일도 번들 CLI로 바로 미리보기 가능
 - **반응형 레이아웃**: Webview 패널이 좁아도 슬라이드·Outline이 실제 너비에 맞게 자동 조정
+- **Slide/Stack Zoom**: 5% 단위 확대/축소, Fit은 화면 여유 공간을 사용해 100% 이상 확대 가능
 
 ### Markdown File Browser (Activity Bar)
 
 - Activity Bar의 **책 아이콘**을 클릭하면 워크스페이스의 모든 `.md` 파일이 폴더 트리로 표시됨
 - **파일 클릭** → 단일 Reader 패널에서 즉시 미리보기 (이전 패널 자동 교체)
 - **우클릭 → Open in New Panel** → 기존 패널 유지하며 새 패널로 열기 (여러 파일 동시 비교)
+- **우클릭 → Hide from Browser** → 관심 없는 파일/폴더를 워크스페이스별로 숨김
+- **우클릭 → Copy Path / Copy Relative Path / Copy Name** → 파일과 폴더 경로/이름 복사
 - Command Palette의 **MD Studio: Open in Viewer**는 현재 열린 Markdown 파일을 대상으로 실행되며, 대상이 없으면 안내 메시지로 종료
 - **검색 아이콘(🔍)** → 파일명·경로 기준 QuickPick 검색
-- 파일 추가/삭제 시 트리 자동 갱신 (300ms 디바운스)
+- **필터 아이콘** → 전체, Pinned, Recent, 오래 안 고침, 긴 문서, 큰 파일 보기
+- **정렬 아이콘** → 이름, 수정일, 생성일, 파일 크기, 문서 길이 기준 정렬
+- **눈 아이콘** → 숨김 항목 관리 및 숨김 전체 해제
+- **Pinned / Recent 가상 섹션**으로 자주 보는 문서와 최근 문서를 빠르게 접근
+- 파일 추가/삭제/수정 시 트리 자동 갱신 (300ms 디바운스)
 - `Ctrl+S` 저장 시 사이드바 선택이 현재 프리뷰 파일로 자동 동기화
 
 ### Reader 내부 텍스트 검색
@@ -282,6 +301,7 @@ npm run test:embed-images
 - `mdStudioPreview.cursorSyncOnSave` (기본값 `true`)
 - `mdStudioPreview.nodePath` (기본값 `node`)
 - `mdStudioPreview.cliScriptPath` (기본값 `scripts/md-to-html.mjs`)
+- `mdStudioPreview.preferredViewMode` (기본값 `stack`, 값: `auto | slides | stack`)
 - `mdStudioPreview.extraArgs` (기본값 `["--standalone"]`)
 
 기본 경로가 현재 워크스페이스에 없으면, 확장 내부에 번들된 CLI로 자동 fallback 후 렌더링합니다.
@@ -299,7 +319,7 @@ npm run package:vsix
 설치:
 
 ```bash
-code --install-extension .\markdown-pattern-studio-preview-0.1.8.vsix
+code --install-extension .\markdown-pattern-studio-preview-0.1.10.vsix
 ```
 
 ### 커서 동기화 동작 (Ctrl+S)
@@ -439,6 +459,18 @@ npm run md2html -- public/examples/design-showcase.md --theme midnight --intent 
 - AI 스킬: `ai_skills/claude/skills/md-presentation-composer/`
 
 ## 변경 이력
+
+### VS Code Extension 0.1.10 — 2026-05-16
+
+**비교 기준:** `db030df` 이후 확장 업데이트
+
+- Markdown File Browser에 정렬, 필터, Pinned, Recent, 숨김 항목 관리, 경로/이름 복사 메뉴 추가
+- 파일 설명을 짧은 한국어/기호 중심 메타데이터로 정리하고, 자세한 정보는 tooltip로 이동
+- 폴더 요약, H1 제목 tooltip, 가능한 경우 Git 상태 배지 표시
+- Slide/Stack Viewer의 반응형 레이아웃과 Outline 동작 개선
+- Slide/Stack 모두 5% 단위 zoom과 100% 이상 Fit 확대 지원
+- 파일 브라우저와 Webview 보강 로직을 모듈로 분리해 주요 소스 파일을 1000줄 미만으로 유지
+- 최신 VSIX: `vscode-extension/markdown-pattern-studio-preview-0.1.10.vsix`
 
 ### v0.3.1 — 2026-05-01 (PPTX-skill Design System)
 

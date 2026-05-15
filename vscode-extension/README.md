@@ -13,8 +13,24 @@ This extension runs the repository CLI (`scripts/md-to-html.mjs`) and opens the 
 - Outline collapsed/expanded state is remembered per document
 - File URI rewrite (`file://...`) to webview-safe resource URIs
 - **Preview works outside the current workspace** — any `.md` file can be previewed using the bundled CLI
-- **Responsive layout** — slide scale and outline panel adapt to the webview panel width
+- **Responsive viewer** — Slide/Stack layout, outline, and zoom controls adapt to the webview panel size
+- **5% zoom controls** — Slide and Stack previews use 5% zoom steps, and Fit can grow beyond 100% when there is room
 - Standalone CLI exports embed local images by default, so generated HTML can be moved without losing relative-path images. Add `--no-embed-local-images` to `mdStudioPreview.extraArgs` to keep file-based image links.
+
+## Recent Changes
+
+Compared from the pre-browser-upgrade point (`db030df`) to the current extension:
+
+- Added file browser sorting by name, modified time, created time, file size, and document line count
+- Added filter modes for all files, Pinned, Recent, stale documents, long documents, and large files
+- Added compact Korean metadata in the tree, with detailed title/date/size/line-count tooltips
+- Added Pinned and Recent virtual sections at the top of the browser
+- Added workspace-scoped hidden files/folders with `Hide from Browser` and `Manage Hidden Items`
+- Added file/folder path, relative path, and name copy commands in the browser context menu
+- Added folder summaries and best-effort Git status badges
+- Improved responsive preview behavior for narrow webview panels
+- Improved Slide and Stack zoom: 5% step controls and Fit values above 100% when space allows
+- Split browser, TreeItem, Git status, runtime, and webview helper code into smaller modules so the main source files stay under 1000 lines
 
 ### Markdown File Browser (Activity Bar)
 
@@ -25,9 +41,17 @@ A dedicated sidebar for navigating markdown files as a reader:
 - **Right-click → Open in New Panel** → opens in a new panel while keeping existing ones open
 - **Command Palette → MD Studio: Open in Viewer** → opens the active markdown file, or shows a clear message when no markdown target is available
 - **Search icon** (🔍) in the sidebar title bar → QuickPick search by filename and path
+- **Filter icon** → show all files, Pinned, Recent, stale documents, long documents, or large files
+- **Sort icon** → sort by name, modified time, created time, file size, or line count
+- **Eye icon** → manage hidden files and folders
 - **Download icon** in the sidebar title bar → choose a bundled/workspace skill and save it as a ZIP folder
+- **Right-click → Pin to Top / Unpin** → keep important documents in the Pinned section
+- **Right-click → Hide from Browser** → hide low-signal files or folders without changing the filesystem
+- **Right-click → Copy Path / Copy Relative Path / Copy Name** → copy file or folder references
+- **Pinned** and **Recent** sections stay above the normal folder tree
+- Folder descriptions summarize document count, recent documents, and stale documents
 - **Collapse All** button to reset the folder tree
-- Tree auto-refreshes when `.md` files are added or deleted (300 ms debounce)
+- Tree auto-refreshes when `.md` files are added, changed, or deleted (300 ms debounce)
 - Sidebar selection syncs automatically when the preview changes via `Ctrl+S`
 
 ### Skill Folder Download
@@ -62,7 +86,7 @@ Default behavior:
 4. If `mdStudioPreview.cliScriptPath` is explicitly customized, that path is prioritized (no automatic bundled fallback override).
 5. **Outside workspace**: bundled CLI is used automatically. Set `mdStudioPreview.cliScriptPath` to an absolute path to override.
 6. View mode: default `preferredViewMode=stack` matches the web editor, and `auto` switches to Stack on narrow webview panels.
-7. Slide scale is calculated from the actual outline panel width, so it no longer clips on narrow panels.
+7. Slide and Stack Fit calculate against the current webview size and can exceed 100% when there is room.
 8. Outline panel remembers the last collapsed/expanded state for each markdown document.
 9. Cursor-sync parser also falls back to bundled `public/core/engine.js` when workspace parser is missing.
 
