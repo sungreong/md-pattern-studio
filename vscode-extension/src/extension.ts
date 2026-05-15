@@ -6,7 +6,14 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { downloadSkillFolderCommand } from './commands/exportSkillFolder.js';
 import { openTemplateBuilderCommand } from './commands/templateBuilder.js';
-import { MarkdownFileBrowserProvider, MarkdownFileItem } from './providers/markdownFileTreeProvider.js';
+import {
+  type MarkdownFileBrowserController,
+  registerMarkdownFileBrowser,
+} from './fileBrowser/registerMarkdownFileBrowser.js';
+import { getUriFromCommandArg, isMarkdownFile, isMarkdownFileUri } from './utils/markdownFiles.js';
+import { assertFileExists, delay, errorToMessage, fileExists } from './utils/runtime.js';
+import { injectPreviewEnhancements } from './webview/previewEnhancements.js';
+import { renderErrorHtml, setPanelStatus } from './webview/statusHtml.js';
 
 type PreviewReason = 'open' | 'refresh' | 'save';
 
@@ -57,14 +64,13 @@ const cliPromptDismissedUntil = new Map<string, number>();
 let lastPreviewKey: string | null = null;
 let extensionInstallPath = '';
 let extensionContextRef: vscode.ExtensionContext | null = null;
-let fileBrowserTreeView: vscode.TreeView<MarkdownFileItem> | null = null;
+let fileBrowserController: MarkdownFileBrowserController | null = null;
 let lastBrowserKey: string | null = null; // tracks the panel opened via file browser
 let outputChannel: vscode.OutputChannel | null = null;
 const outlineStateKeyPrefix = 'mdStudioPreview:outlineCollapsed:';
 const dynamicImportModule = new Function('modulePath', 'return import(modulePath);') as (
   modulePath: string,
 ) => Promise<Record<string, unknown>>;
-
 export function activate(context: vscode.ExtensionContext) {
   extensionInstallPath = context.extensionPath;
   extensionContextRef = context;
@@ -146,95 +152,11 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // --- Markdown File Browser sidebar ---
-  const fileBrowserProvider = new MarkdownFileBrowserProvider(context);
-  fileBrowserTreeView = vscode.window.createTreeView('mdStudioFileBrowser', {
-    treeDataProvider: fileBrowserProvider,
-    showCollapseAll: true,
+  fileBrowserController = registerMarkdownFileBrowser(context, {
+    resolveMarkdownUri: resolveMarkdownUriFromCommandArg,
+    openInViewer: openMarkdownInBrowserPanel,
+    openInNewPanel: openMarkdownInNewPanel,
   });
-  context.subscriptions.push(fileBrowserTreeView);
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('mdStudioFileBrowser.refresh', () => {
-      void fileBrowserProvider.refresh();
-    }),
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('mdStudioPreview.openFileInViewer', async (commandArg?: unknown) => {
-      const uri = await resolveMarkdownUriFromCommandArg(commandArg);
-      if (!uri) return;
-      const newKey = uri.toString();
-      // Close the previous browser panel so only one reader panel stays open
-      if (lastBrowserKey && lastBrowserKey !== newKey) {
-        const prev = sessions.get(lastBrowserKey);
-        if (prev) prev.panel.dispose();
-      }
-      lastBrowserKey = newKey;
-      const document = await vscode.workspace.openTextDocument(uri);
-      await queuePreview(document, 'open');
-    }),
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('mdStudioPreview.openFileInNewPanel', async (commandArg?: unknown) => {
-      // Context menu passes the TreeItem; inline button / programmatic call passes a Uri.
-      const uri = await resolveMarkdownUriFromCommandArg(commandArg);
-      if (!uri) return;
-      // Open without closing any existing panel — each call creates an independent session
-      const document = await vscode.workspace.openTextDocument(uri);
-      await queuePreview(document, 'open');
-    }),
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('mdStudioFileBrowser.search', async () => {
-      const exclude = '{**/node_modules/**,**/.git/**,**/dist/**,**/.next/**}';
-      const uris = await vscode.workspace.findFiles('**/*.{md,mdx,markdown,mdown,mkd,mkdn}', exclude);
-      const folders = vscode.workspace.workspaceFolders;
-
-      const items = uris
-        .map((uri) => {
-          const rel = folders?.length
-            ? vscode.workspace.asRelativePath(uri, (folders?.length ?? 0) > 1)
-            : uri.fsPath;
-          return {
-            label: path.basename(uri.fsPath),
-            description: path.dirname(rel),
-            uri,
-          };
-        })
-        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
-
-      const picked = await vscode.window.showQuickPick(items, {
-        placeHolder: 'Search markdown files...',
-        matchOnDescription: true,
-      });
-      if (!picked) return;
-
-      // Reuse the single browser panel (same as clicking in tree)
-      const newKey = picked.uri.toString();
-      if (lastBrowserKey && lastBrowserKey !== newKey) {
-        const prev = sessions.get(lastBrowserKey);
-        if (prev) prev.panel.dispose();
-      }
-      lastBrowserKey = newKey;
-      const document = await vscode.workspace.openTextDocument(picked.uri);
-      await queuePreview(document, 'open');
-
-      // Reveal selected file in the tree
-      if (fileBrowserTreeView) {
-        try {
-          void fileBrowserTreeView.reveal(new MarkdownFileItem(picked.uri, false), {
-            select: true,
-            focus: false,
-          });
-        } catch {
-          // File may not be in tree — ignore
-        }
-      }
-    }),
-  );
 }
 
 export function deactivate() {
@@ -244,7 +166,7 @@ export function deactivate() {
   }
   sessions.clear();
   extensionContextRef = null;
-  fileBrowserTreeView = null;
+  fileBrowserController = null;
   lastBrowserKey = null;
   outputChannel = null;
 }
@@ -343,35 +265,6 @@ function buildDefaultStyledHtmlPath(inputPath: string): string {
   return path.join(inputDir, `${inputBaseName}.styled.html`);
 }
 
-const MARKDOWN_EXTENSIONS = new Set(['.md', '.mdx', '.markdown', '.mdown', '.mkd', '.mkdn']);
-const MARKDOWN_LANGUAGE_IDS = new Set(['markdown', 'mdx']);
-
-function isMarkdownFile(document: vscode.TextDocument): boolean {
-  if (document.isUntitled) return false;
-  if (MARKDOWN_LANGUAGE_IDS.has(document.languageId)) return true;
-  const ext = document.uri.fsPath.toLowerCase().slice(document.uri.fsPath.lastIndexOf('.'));
-  return MARKDOWN_EXTENSIONS.has(ext);
-}
-
-function isMarkdownFileUri(uri: vscode.Uri): boolean {
-  if (uri.scheme !== 'file') return false;
-  const ext = path.extname(uri.fsPath).toLowerCase();
-  return MARKDOWN_EXTENSIONS.has(ext);
-}
-
-function getUriFromCommandArg(commandArg: unknown): vscode.Uri | null {
-  if (commandArg instanceof vscode.Uri) return commandArg;
-  if (!commandArg || typeof commandArg !== 'object') return null;
-
-  const resourceUri = (commandArg as { resourceUri?: unknown }).resourceUri;
-  if (resourceUri instanceof vscode.Uri) return resourceUri;
-
-  const uri = (commandArg as { uri?: unknown }).uri;
-  if (uri instanceof vscode.Uri) return uri;
-
-  return null;
-}
-
 async function resolveMarkdownUriFromCommandArg(commandArg: unknown): Promise<vscode.Uri | null> {
   const commandUri = getUriFromCommandArg(commandArg);
   if (commandUri) {
@@ -382,6 +275,22 @@ async function resolveMarkdownUriFromCommandArg(commandArg: unknown): Promise<vs
 
   const document = await resolveTargetDocument();
   return document?.uri ?? null;
+}
+
+async function openMarkdownInBrowserPanel(uri: vscode.Uri): Promise<void> {
+  const newKey = uri.toString();
+  if (lastBrowserKey && lastBrowserKey !== newKey) {
+    const previous = sessions.get(lastBrowserKey);
+    if (previous) previous.panel.dispose();
+  }
+  lastBrowserKey = newKey;
+  const document = await vscode.workspace.openTextDocument(uri);
+  await queuePreview(document, 'open');
+}
+
+async function openMarkdownInNewPanel(uri: vscode.Uri): Promise<void> {
+  const document = await vscode.workspace.openTextDocument(uri);
+  await queuePreview(document, 'open');
 }
 
 async function resolveTargetDocument(): Promise<vscode.TextDocument | null> {
@@ -454,10 +363,12 @@ async function previewDocument(document: vscode.TextDocument, reason: PreviewRea
       localResourceRoots: roots,
     };
 
-    const html = injectPreviewSyncBridge(
+    const html = injectPreviewEnhancements(
       rewriteLocalFileUris(renderOutput.html, session.panel.webview),
-      config.preferredViewMode,
-      session.outlineCollapsed,
+      {
+        preferredViewMode: config.preferredViewMode,
+        outlineCollapsed: session.outlineCollapsed,
+      },
     );
     // Reset per-render sync marker because replacing webview HTML resets scroll/state.
     session.lastSyncedSectionId = null;
@@ -471,18 +382,11 @@ async function previewDocument(document: vscode.TextDocument, reason: PreviewRea
     }
     session.tempOutputPath = renderOutput.outputPath;
     lastPreviewKey = key;
-
-    // Sync sidebar selection to the currently previewed file
-    if (fileBrowserTreeView) {
-      try {
-        void fileBrowserTreeView.reveal(new MarkdownFileItem(document.uri, false), {
-          select: true,
-          focus: false,
-        });
-      } catch {
-        // File may not be in the tree (outside workspace) — ignore
-      }
+    if (reason !== 'save') {
+      fileBrowserController?.recordRecent(document.uri);
     }
+
+    fileBrowserController?.reveal(document.uri);
 
     if (reason === 'save') {
       await syncPreviewToSection(session, syncTargetSectionId);
@@ -1050,446 +954,6 @@ async function postSyncMessageWithRetry(webview: vscode.Webview, sectionId: stri
   return delivered;
 }
 
-function injectPreviewSyncBridge(
-  html: string,
-  preferredViewMode: 'auto' | 'slides' | 'stack',
-  initialOutlineCollapsed: boolean,
-): string {
-  if (html.includes('mdStudioPreview.syncSection')) return html;
-  const bridgeScript = `
-<script>
-(function () {
-  if (window.__mdStudioPreviewSyncInstalled) return;
-  window.__mdStudioPreviewSyncInstalled = true;
-  const preferredViewMode = ${JSON.stringify(preferredViewMode)};
-  const initialOutlineCollapsed = ${initialOutlineCollapsed ? 'true' : 'false'};
-
-  const vscodeApi = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
-  const notifyReady = () => {
-    if (!vscodeApi || typeof vscodeApi.postMessage !== 'function') return;
-    vscodeApi.postMessage({ type: 'mdStudioPreview.ready' });
-  };
-  const notifyOutlineState = (collapsed) => {
-    if (!vscodeApi || typeof vscodeApi.postMessage !== 'function') return;
-    vscodeApi.postMessage({ type: 'mdStudioPreview.outlineStateChanged', collapsed: Boolean(collapsed) });
-  };
-
-  const notifyReadyTwice = () => {
-    notifyReady();
-    window.setTimeout(notifyReady, 120);
-  };
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', notifyReadyTwice, { once: true });
-  } else {
-    notifyReadyTwice();
-  }
-
-  const shouldUseStackByPreference = () => {
-    if (preferredViewMode === 'stack') return true;
-    if (preferredViewMode === 'slides') return false;
-    return window.innerWidth < 1400;
-  };
-
-  const applyPreferredViewMode = () => {
-    if (!shouldUseStackByPreference()) return;
-    if (document.body.classList.contains('export-stacked')) return;
-    const toggle = document.querySelector('.export-slide-nav [data-action="toggle"]');
-    if (!toggle || typeof toggle.click !== 'function') return;
-    toggle.click();
-  };
-
-  const modeCheckDelays = [0, 80, 220, 450, 900];
-  for (const waitMs of modeCheckDelays) {
-    window.setTimeout(applyPreferredViewMode, waitMs);
-  }
-
-  const getOutlineCollapsed = (outline) => Boolean(outline && outline.classList.contains('is-collapsed'));
-
-  const applyInitialOutlineState = () => {
-    const outline = document.querySelector('.export-outline');
-    if (!outline) return false;
-    const toggle = outline.querySelector('[data-outline-toggle]');
-    const current = getOutlineCollapsed(outline);
-    if (current !== initialOutlineCollapsed) {
-      if (toggle && typeof toggle.click === 'function') {
-        toggle.click();
-      } else {
-        outline.classList.toggle('is-collapsed', initialOutlineCollapsed);
-      }
-    }
-
-    const collapsed = getOutlineCollapsed(outline);
-    if (toggle) {
-      toggle.textContent = collapsed ? 'Show' : 'Hide';
-      if (!toggle.hasAttribute('data-md-studio-outline-bound')) {
-        toggle.setAttribute('data-md-studio-outline-bound', '1');
-        toggle.addEventListener('click', () => {
-          window.setTimeout(() => {
-            notifyOutlineState(getOutlineCollapsed(outline));
-          }, 0);
-        });
-      }
-    }
-
-    notifyOutlineState(collapsed);
-    return true;
-  };
-
-  const outlineCheckDelays = [0, 80, 220, 450, 900];
-  for (const waitMs of outlineCheckDelays) {
-    window.setTimeout(applyInitialOutlineState, waitMs);
-  }
-
-  const findByDataValue = (selector, attrName, targetValue) => {
-    const nodes = document.querySelectorAll(selector);
-    for (const node of nodes) {
-      if (node.getAttribute(attrName) === targetValue) {
-        return node;
-      }
-    }
-    return null;
-  };
-
-  const findTarget = (sectionId) => {
-    if (!sectionId) return null;
-    const byId = document.getElementById(sectionId);
-    if (byId) return byId;
-    return findByDataValue('[data-section-id]', 'data-section-id', sectionId);
-  };
-
-  window.addEventListener('message', (event) => {
-    const data = event && event.data ? event.data : null;
-    if (!data || data.type !== 'mdStudioPreview.syncSection') return;
-
-    const sectionId = String(data.sectionId || '').trim();
-    if (!sectionId) return;
-
-    const outlineLink = findByDataValue('[data-outline-id]', 'data-outline-id', sectionId);
-    if (outlineLink && typeof outlineLink.click === 'function') {
-      outlineLink.click();
-      return;
-    }
-
-    const target = findTarget(sectionId);
-    if (!target || typeof target.scrollIntoView !== 'function') return;
-
-    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
-  });
-})();
-</script>`;
-
-  const searchScript = `
-<style>
-#mps-search-bar {
-  position: fixed;
-  top: 12px;
-  right: 12px;
-  z-index: 99999;
-  display: none;
-  align-items: center;
-  gap: 5px;
-  background: var(--vscode-editorWidget-background, #252526);
-  border: 1px solid var(--vscode-editorWidget-border, #454545);
-  border-radius: 6px;
-  padding: 5px 8px;
-  box-shadow: 0 4px 18px rgba(0,0,0,0.45);
-  font-family: var(--vscode-font-family, system-ui, sans-serif);
-  font-size: 13px;
-  color: var(--vscode-editorWidget-foreground, #ccc);
-}
-#mps-search-input {
-  background: var(--vscode-input-background, #3c3c3c);
-  border: 1px solid var(--vscode-input-border, transparent);
-  color: var(--vscode-input-foreground, #ccc);
-  border-radius: 3px;
-  padding: 3px 8px;
-  font-size: 13px;
-  width: 190px;
-  outline: none;
-}
-#mps-search-input:focus { border-color: var(--vscode-focusBorder, #007fd4); }
-#mps-search-count { min-width: 56px; text-align: center; font-size: 11px; opacity: 0.7; }
-.mps-search-btn {
-  background: transparent;
-  border: none;
-  color: var(--vscode-editorWidget-foreground, #ccc);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 2px 5px;
-  border-radius: 3px;
-  line-height: 1;
-}
-.mps-search-btn:hover { background: var(--vscode-toolbar-hoverBackground, rgba(255,255,255,0.1)); }
-mark.mps-hit { background: #ffeb3b; color: #000; border-radius: 2px; padding: 0 1px; }
-mark.mps-hit.mps-hit-active { background: #ff9800; outline: 2px solid #ff9800; }
-</style>
-<div id="mps-search-bar">
-  <input id="mps-search-input" type="text" placeholder="Search in document..." autocomplete="off" spellcheck="false">
-  <span id="mps-search-count"></span>
-  <button class="mps-search-btn" id="mps-search-prev" title="Previous (Shift+Enter)">↑</button>
-  <button class="mps-search-btn" id="mps-search-next" title="Next (Enter)">↓</button>
-  <button class="mps-search-btn" id="mps-search-close" title="Close (Escape)">✕</button>
-</div>
-<script>
-(function () {
-  if (window.__mpsSearchInstalled) return;
-  window.__mpsSearchInstalled = true;
-
-  const bar = document.getElementById('mps-search-bar');
-  const input = document.getElementById('mps-search-input');
-  const countEl = document.getElementById('mps-search-count');
-  const prevBtn = document.getElementById('mps-search-prev');
-  const nextBtn = document.getElementById('mps-search-next');
-  const closeBtn = document.getElementById('mps-search-close');
-
-  let marks = [];
-  let currentIndex = -1;
-  let lastQuery = '';
-  let debounceTimer = null;
-
-  function escapeRegex(s) {
-    // Escape regex special chars without using a regex literal (avoids template literal issues)
-    var specials = ['.', '*', '+', '?', '^', '(', ')', '|', '[', ']'];
-    var result = s;
-    for (var i = 0; i < specials.length; i++) {
-      result = result.split(specials[i]).join('\\\\' + specials[i]);
-    }
-    return result;
-  }
-
-  function clearMarks() {
-    marks.forEach(function (m) {
-      if (!m.parentNode) return;
-      m.parentNode.replaceChild(document.createTextNode(m.textContent || ''), m);
-    });
-    // Normalize merged text nodes
-    document.body.normalize();
-    marks = [];
-    currentIndex = -1;
-  }
-
-  function highlightAll(query) {
-    clearMarks();
-    if (!query) { updateCount(); return; }
-
-    var regex = new RegExp(escapeRegex(query), 'gi');
-    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-      acceptNode: function (node) {
-        var el = node.parentElement;
-        if (!el) return NodeFilter.FILTER_REJECT;
-        var tag = el.tagName.toLowerCase();
-        if (tag === 'script' || tag === 'style' || tag === 'noscript') return NodeFilter.FILTER_REJECT;
-        if (el.closest && el.closest('#mps-search-bar')) return NodeFilter.FILTER_REJECT;
-        return (node.textContent || '').search(regex) !== -1
-          ? NodeFilter.FILTER_ACCEPT
-          : NodeFilter.FILTER_SKIP;
-      }
-    });
-
-    var textNodes = [];
-    var node;
-    while ((node = walker.nextNode())) textNodes.push(node);
-
-    textNodes.forEach(function (textNode) {
-      var text = textNode.textContent || '';
-      regex.lastIndex = 0;
-      var fragment = document.createDocumentFragment();
-      var lastIdx = 0;
-      var match;
-      while ((match = regex.exec(text)) !== null) {
-        if (match.index > lastIdx) {
-          fragment.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
-        }
-        var mark = document.createElement('mark');
-        mark.className = 'mps-hit';
-        mark.textContent = match[0];
-        fragment.appendChild(mark);
-        marks.push(mark);
-        lastIdx = regex.lastIndex;
-      }
-      if (lastIdx < text.length) {
-        fragment.appendChild(document.createTextNode(text.slice(lastIdx)));
-      }
-      if (textNode.parentNode) textNode.parentNode.replaceChild(fragment, textNode);
-    });
-
-    updateCount();
-    if (marks.length) { currentIndex = 0; activateMark(0); }
-  }
-
-  function activateMark(index) {
-    marks.forEach(function (m, i) {
-      m.classList.toggle('mps-hit-active', i === index);
-    });
-    if (marks[index]) {
-      marks[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    updateCount();
-  }
-
-  function updateCount() {
-    if (!lastQuery) { countEl.textContent = ''; return; }
-    if (!marks.length) { countEl.textContent = 'No results'; return; }
-    countEl.textContent = (currentIndex + 1) + ' / ' + marks.length;
-  }
-
-  function goNext() {
-    if (!marks.length) return;
-    currentIndex = (currentIndex + 1) % marks.length;
-    activateMark(currentIndex);
-  }
-
-  function goPrev() {
-    if (!marks.length) return;
-    currentIndex = (currentIndex - 1 + marks.length) % marks.length;
-    activateMark(currentIndex);
-  }
-
-  function openSearch() {
-    bar.style.display = 'flex';
-    input.focus();
-    input.select();
-  }
-
-  function closeSearch() {
-    bar.style.display = 'none';
-    clearMarks();
-    input.value = '';
-    lastQuery = '';
-    countEl.textContent = '';
-  }
-
-  input.addEventListener('input', function () {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(function () {
-      var q = input.value;
-      if (q === lastQuery) return;
-      lastQuery = q;
-      highlightAll(q);
-    }, 180);
-  });
-
-  input.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      e.shiftKey ? goPrev() : goNext();
-    } else if (e.key === 'Escape') {
-      closeSearch();
-    }
-  });
-
-  prevBtn.addEventListener('click', goPrev);
-  nextBtn.addEventListener('click', goNext);
-  closeBtn.addEventListener('click', closeSearch);
-
-  window.addEventListener('keydown', function (e) {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-      e.preventDefault();
-      e.stopPropagation();
-      openSearch();
-    } else if (e.key === 'Escape' && bar.style.display !== 'none') {
-      closeSearch();
-    }
-  }, true);
-})();
-</script>`;
-
-  const lower = html.toLowerCase();
-  const bodyIndex = lower.lastIndexOf('</body>');
-  if (bodyIndex === -1) return `${html}\n${bridgeScript}\n${searchScript}`;
-  return `${html.slice(0, bodyIndex)}\n${bridgeScript}\n${searchScript}\n${html.slice(bodyIndex)}`;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function setPanelStatus(panel: vscode.WebviewPanel, message: string): void {
-  panel.webview.html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    body {
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-foreground);
-      background: var(--vscode-editor-background);
-      margin: 0;
-      padding: 18px;
-    }
-    .status {
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 8px;
-      padding: 12px;
-      background: color-mix(in srgb, var(--vscode-editor-background) 90%, var(--vscode-editor-foreground) 10%);
-    }
-  </style>
-</head>
-<body>
-  <div class="status">${escapeHtml(message)}</div>
-</body>
-</html>`;
-}
-
-function renderErrorHtml(message: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    body {
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-editorError-foreground);
-      background: var(--vscode-editor-background);
-      margin: 0;
-      padding: 18px;
-    }
-    pre {
-      white-space: pre-wrap;
-      border: 1px solid var(--vscode-editorError-foreground);
-      border-radius: 8px;
-      padding: 12px;
-      background: color-mix(in srgb, var(--vscode-editor-background) 88%, var(--vscode-editorError-foreground) 12%);
-      color: var(--vscode-editorError-foreground);
-    }
-  </style>
-</head>
-<body>
-  <pre>${escapeHtml(message)}</pre>
-</body>
-</html>`;
-}
-
-function escapeHtml(value: string): string {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-async function assertFileExists(targetPath: string, message: string): Promise<void> {
-  try {
-    await fs.access(targetPath);
-  } catch {
-    throw new Error(message);
-  }
-}
-
-async function fileExists(targetPath: string): Promise<boolean> {
-  try {
-    await fs.access(targetPath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function getOutlineStateKey(documentKey: string): string {
   return `${outlineStateKeyPrefix}${documentKey}`;
 }
@@ -1511,9 +975,4 @@ async function cleanupTempFile(tempPath: string | null): Promise<void> {
   } catch {
     // Ignore temp cleanup failures.
   }
-}
-
-function errorToMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
 }
