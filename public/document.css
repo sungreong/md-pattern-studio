@@ -1313,6 +1313,231 @@
   line-height: 1.6;
 }
 
+/* ─── Viewer Appearance Overrides ─────────────────────────────────────────── */
+
+.studio-document.appearance-clean .document-shell,
+.studio-document.appearance-flat .document-shell,
+.studio-document.appearance-reader .document-shell,
+.studio-document.appearance-print .document-shell {
+  gap: 16px;
+}
+
+.studio-document.appearance-clean .doc-page,
+.studio-document.appearance-clean .doc-page-inner,
+.studio-document.appearance-clean .document-intro,
+.studio-document.appearance-clean .md-toc,
+.studio-document.appearance-clean .md-section,
+.studio-document.appearance-clean .section-card,
+.studio-document.appearance-clean .md-table-shell,
+.studio-document.appearance-clean .md-code,
+.studio-document.appearance-clean .md-figure,
+.studio-document.appearance-clean .md-callout {
+  box-shadow: none !important;
+}
+
+.studio-document.appearance-clean .doc-page {
+  background: var(--doc-bg);
+}
+
+.studio-document.appearance-clean .doc-page-inner {
+  background: transparent;
+}
+
+.studio-document.appearance-flat .doc-page,
+.studio-document.appearance-flat .doc-page-inner,
+.studio-document.appearance-flat .document-intro,
+.studio-document.appearance-flat .md-toc,
+.studio-document.appearance-flat .md-section,
+.studio-document.appearance-flat .section-card,
+.studio-document.appearance-flat .md-table-shell,
+.studio-document.appearance-flat .md-code,
+.studio-document.appearance-flat .md-figure,
+.studio-document.appearance-flat .md-callout,
+.studio-document.appearance-flat code,
+.studio-document.appearance-flat .cover-eyebrow,
+.studio-document.appearance-flat .doc-page-links a,
+.studio-document.appearance-flat .code-copy-btn,
+.studio-document.appearance-flat .stat-card {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.studio-document.appearance-flat .doc-page {
+  background: var(--doc-bg);
+  border-color: var(--doc-line-soft);
+  padding: 0;
+}
+
+.studio-document.appearance-flat .doc-page-inner {
+  background: transparent;
+}
+
+.studio-document.appearance-reader {
+  --doc-bg-soft: transparent;
+  --doc-bg-strong: transparent;
+}
+
+.studio-document.appearance-reader .document-shell:not(.is-paginated) {
+  max-width: 860px;
+  gap: 0;
+}
+
+.studio-document.appearance-reader .document-intro,
+.studio-document.appearance-reader .md-toc,
+.studio-document.appearance-reader .md-section {
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 10px 0 24px;
+}
+
+.studio-document.appearance-reader .md-section + .md-section,
+.studio-document.appearance-reader .document-intro + .md-section,
+.studio-document.appearance-reader .md-toc + .md-section {
+  border-top: 1px solid var(--doc-line-soft);
+}
+
+.studio-document.appearance-reader .md-paragraph {
+  font-size: 18px;
+  line-height: 1.9;
+}
+
+.studio-document.appearance-print {
+  --doc-text: #111827;
+  --doc-muted: #4b5563;
+  --doc-line: rgba(156, 163, 175, 0.72);
+  --doc-line-soft: rgba(209, 213, 219, 0.9);
+  --doc-bg: #ffffff;
+  --doc-bg-soft: #ffffff;
+  --doc-bg-strong: #f8fafc;
+  --doc-accent: #1f2937;
+  --doc-accent-soft: rgba(31, 41, 55, 0.08);
+}
+
+.studio-document.appearance-print .doc-page,
+.studio-document.appearance-print .doc-page-inner,
+.studio-document.appearance-print .document-intro,
+.studio-document.appearance-print .md-toc,
+.studio-document.appearance-print .md-section,
+.studio-document.appearance-print .section-card,
+.studio-document.appearance-print .md-table-shell,
+.studio-document.appearance-print .md-code,
+.studio-document.appearance-print .md-figure,
+.studio-document.appearance-print .md-callout,
+.studio-document.appearance-print .stat-card {
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.studio-document.appearance-print .doc-page,
+.studio-document.appearance-print .doc-page-inner,
+.studio-document.appearance-print .document-intro,
+.studio-document.appearance-print .md-toc,
+.studio-document.appearance-print .md-section {
+  border-radius: 0 !important;
+}
+
+.studio-document.appearance-bg-plain {
+  --doc-bg-soft: var(--doc-bg);
+  --doc-bg-strong: var(--doc-bg);
+}
+
+.studio-document.appearance-bg-plain .doc-page,
+.studio-document.appearance-bg-plain .doc-page-inner,
+.studio-document.appearance-bg-plain .document-intro,
+.studio-document.appearance-bg-plain .md-toc,
+.studio-document.appearance-bg-plain .md-section,
+.studio-document.appearance-bg-plain .section-card,
+.studio-document.appearance-bg-plain .md-table-shell,
+.studio-document.appearance-bg-plain .md-code,
+.studio-document.appearance-bg-plain .md-figure,
+.studio-document.appearance-bg-plain .md-callout,
+.studio-document.appearance-bg-plain .stat-card {
+  background: var(--doc-bg) !important;
+}
+
+.studio-document.appearance-bg-transparent {
+  --doc-bg-soft: transparent;
+  --doc-bg-strong: transparent;
+}
+
+.studio-document.appearance-bg-transparent .doc-page,
+.studio-document.appearance-bg-transparent .doc-page-inner,
+.studio-document.appearance-bg-transparent .document-intro,
+.studio-document.appearance-bg-transparent .md-toc,
+.studio-document.appearance-bg-transparent .md-section,
+.studio-document.appearance-bg-transparent .section-card,
+.studio-document.appearance-bg-transparent .md-table-shell,
+.studio-document.appearance-bg-transparent .md-code,
+.studio-document.appearance-bg-transparent .md-figure,
+.studio-document.appearance-bg-transparent .md-callout,
+.studio-document.appearance-bg-transparent .stat-card {
+  background: transparent !important;
+}
+
+.studio-document.appearance-radius-none .doc-page,
+.studio-document.appearance-radius-none .doc-page-inner,
+.studio-document.appearance-radius-none .document-intro,
+.studio-document.appearance-radius-none .md-toc,
+.studio-document.appearance-radius-none .md-section,
+.studio-document.appearance-radius-none .section-card,
+.studio-document.appearance-radius-none .md-table-shell,
+.studio-document.appearance-radius-none .md-code,
+.studio-document.appearance-radius-none .md-figure,
+.studio-document.appearance-radius-none .md-callout,
+.studio-document.appearance-radius-none .stat-card,
+.studio-document.appearance-radius-none code,
+.studio-document.appearance-radius-none .cover-eyebrow,
+.studio-document.appearance-radius-none .doc-page-links a,
+.studio-document.appearance-radius-none .code-copy-btn {
+  border-radius: 0 !important;
+}
+
+.studio-document.appearance-radius-soft .doc-page,
+.studio-document.appearance-radius-soft .doc-page-inner,
+.studio-document.appearance-radius-soft .document-intro,
+.studio-document.appearance-radius-soft .md-toc,
+.studio-document.appearance-radius-soft .md-section,
+.studio-document.appearance-radius-soft .section-card,
+.studio-document.appearance-radius-soft .md-table-shell,
+.studio-document.appearance-radius-soft .md-code,
+.studio-document.appearance-radius-soft .md-figure,
+.studio-document.appearance-radius-soft .md-callout,
+.studio-document.appearance-radius-soft .stat-card {
+  border-radius: 6px !important;
+}
+
+.studio-document.appearance-frame-lines .doc-page,
+.studio-document.appearance-frame-lines .doc-page-inner,
+.studio-document.appearance-frame-lines .document-intro,
+.studio-document.appearance-frame-lines .md-toc,
+.studio-document.appearance-frame-lines .md-section,
+.studio-document.appearance-frame-lines .section-card,
+.studio-document.appearance-frame-lines .md-table-shell,
+.studio-document.appearance-frame-lines .md-code,
+.studio-document.appearance-frame-lines .md-figure,
+.studio-document.appearance-frame-lines .md-callout,
+.studio-document.appearance-frame-lines .stat-card {
+  box-shadow: none !important;
+  border-color: var(--doc-line-soft) !important;
+}
+
+.studio-document.appearance-frame-none .doc-page,
+.studio-document.appearance-frame-none .doc-page-inner,
+.studio-document.appearance-frame-none .document-intro,
+.studio-document.appearance-frame-none .md-toc,
+.studio-document.appearance-frame-none .md-section,
+.studio-document.appearance-frame-none .section-card,
+.studio-document.appearance-frame-none .md-table-shell,
+.studio-document.appearance-frame-none .md-code,
+.studio-document.appearance-frame-none .md-figure,
+.studio-document.appearance-frame-none .md-callout,
+.studio-document.appearance-frame-none .stat-card {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 @media (max-width: 820px) {

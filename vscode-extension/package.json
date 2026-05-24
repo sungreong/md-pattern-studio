@@ -2,7 +2,7 @@
   "name": "markdown-pattern-studio-preview",
   "displayName": "Markdown Pattern Studio Preview",
   "description": "Preview Markdown Pattern Studio CLI output in a VS Code webview.",
-  "version": "0.1.14",
+  "version": "0.1.19",
   "publisher": "local",
   "repository": {
     "type": "git",
@@ -22,12 +22,16 @@
     "onCommand:mdStudioPreview.openTemplateBuilder",
     "onCommand:mdStudioPreview.openFileInViewer",
     "onCommand:mdStudioPreview.openFileInNewPanel",
+    "onCommand:mdStudioFileBrowser.openInEditor",
     "onCommand:mdStudioPreview.transformMarkdownToHtml",
     "onCommand:mdStudioPreview.downloadSkillFolder",
     "onCommand:mdStudioPreview.diagnoseEnvironment",
+    "onCommand:mdStudioPreview.focusFolder",
+    "onCommand:mdStudioPreview.clearFolderFocus",
     "onCommand:mdStudioFileBrowser.refresh",
     "onCommand:mdStudioFileBrowser.sort",
     "onCommand:mdStudioFileBrowser.filter",
+    "onCommand:mdStudioFileBrowser.configureExtensions",
     "onCommand:mdStudioFileBrowser.pinToTop",
     "onCommand:mdStudioFileBrowser.unpin",
     "onCommand:mdStudioFileBrowser.copyPath",
@@ -52,7 +56,7 @@
       "mdStudioFileBrowserContainer": [
         {
           "id": "mdStudioFileBrowser",
-          "name": "Markdown Files",
+          "name": "MD Studio Files",
           "when": "workspaceFolderCount > 0"
         }
       ]
@@ -82,6 +86,16 @@
         "icon": "$(pulse)"
       },
       {
+        "command": "mdStudioPreview.focusFolder",
+        "title": "FOCUS",
+        "icon": "$(target)"
+      },
+      {
+        "command": "mdStudioPreview.clearFolderFocus",
+        "title": "FOCUS 해제",
+        "icon": "$(eye)"
+      },
+      {
         "command": "mdStudioPreview.transformMarkdownToHtml",
         "title": "MD Studio: Transform Markdown to Styled HTML",
         "icon": "$(file-code)"
@@ -97,24 +111,34 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "mdStudioFileBrowser.openInEditor",
+        "title": "Open in Editor",
+        "icon": "$(go-to-file)"
+      },
+      {
         "command": "mdStudioPreview.openFileInNewPanel",
         "title": "Open in New Panel",
         "icon": "$(split-horizontal)"
       },
       {
         "command": "mdStudioFileBrowser.search",
-        "title": "MD Studio: Search Markdown Files",
+        "title": "MD Studio: Search Files",
         "icon": "$(search)"
       },
       {
         "command": "mdStudioFileBrowser.sort",
-        "title": "MD Studio: Sort Markdown Files",
+        "title": "MD Studio: Sort Files",
         "icon": "$(list-ordered)"
       },
       {
         "command": "mdStudioFileBrowser.filter",
-        "title": "MD Studio: Filter Markdown Files",
+        "title": "MD Studio: Filter Files",
         "icon": "$(filter)"
+      },
+      {
+        "command": "mdStudioFileBrowser.configureExtensions",
+        "title": "MD Studio: File Extensions",
+        "icon": "$(symbol-misc)"
       },
       {
         "command": "mdStudioFileBrowser.pinToTop",
@@ -173,7 +197,7 @@
         "mdStudioPreview.cliScriptPath": {
           "type": "string",
           "default": "scripts/md-to-html.mjs",
-          "description": "CLI script path. Relative paths are resolved from workspace root. Absolute paths are also supported."
+          "description": "CLI script path. The default value uses the renderer bundled with this extension first, so generated HTML gets the latest viewer controls. Set a custom relative or absolute path to use a workspace renderer."
         },
         "mdStudioPreview.preferredViewMode": {
           "type": "string",
@@ -209,6 +233,15 @@
           "type": "string",
           "default": "md-presentation-composer",
           "description": "Preferred skill shown first in Template Builder when matching skills are available."
+        },
+        "mdStudioFileBrowser.extraExtensions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^\\.?[A-Za-z0-9][A-Za-z0-9_-]*$"
+          },
+          "default": [],
+          "description": "Additional file extensions to show in MD Studio File Browser. Markdown extensions are always included. Examples: txt, html, json."
         }
       }
     },
@@ -230,19 +263,29 @@
           "group": "navigation@3"
         },
         {
-          "command": "mdStudioFileBrowser.manageHidden",
+          "command": "mdStudioFileBrowser.configureExtensions",
           "when": "view == mdStudioFileBrowser",
           "group": "navigation@4"
         },
         {
-          "command": "mdStudioFileBrowser.refresh",
+          "command": "mdStudioFileBrowser.manageHidden",
           "when": "view == mdStudioFileBrowser",
           "group": "navigation@5"
         },
         {
-          "command": "mdStudioPreview.downloadSkillFolder",
+          "command": "mdStudioFileBrowser.refresh",
           "when": "view == mdStudioFileBrowser",
           "group": "navigation@6"
+        },
+        {
+          "command": "mdStudioPreview.downloadSkillFolder",
+          "when": "view == mdStudioFileBrowser",
+          "group": "navigation@7"
+        },
+        {
+          "command": "mdStudioPreview.clearFolderFocus",
+          "when": "view == mdStudioFileBrowser && mdStudioPreview.folderFocusActive",
+          "group": "navigation@8"
         }
       ],
       "editor/title": [
@@ -274,44 +317,64 @@
           "group": "inline"
         },
         {
+          "command": "mdStudioFileBrowser.openInEditor",
+          "when": "view == mdStudioFileBrowser && (viewItem == mdExtraFile || viewItem == mdExtraFilePinned || viewItem == mdExtraPinnedFile || viewItem == mdExtraRecentFile || viewItem == mdExtraFilterFile || viewItem == mdExtraFilterFilePinned)",
+          "group": "inline"
+        },
+        {
           "command": "mdStudioFileBrowser.pinToTop",
-          "when": "view == mdStudioFileBrowser && (viewItem == mdFile || viewItem == mdRecentFile || viewItem == mdFilterFile)",
+          "when": "view == mdStudioFileBrowser && (viewItem == mdFile || viewItem == mdRecentFile || viewItem == mdFilterFile || viewItem == mdExtraFile || viewItem == mdExtraRecentFile || viewItem == mdExtraFilterFile)",
           "group": "navigation@0"
         },
         {
-          "command": "mdStudioFileBrowser.unpin",
-          "when": "view == mdStudioFileBrowser && (viewItem == mdFilePinned || viewItem == mdPinnedFile || viewItem == mdFilterFilePinned)",
+          "command": "mdStudioPreview.clearFolderFocus",
+          "when": "view == mdStudioFileBrowser && viewItem == mdFolder && mdStudioPreview.folderFocusActive",
           "group": "navigation@0"
+        },
+        {
+          "command": "mdStudioPreview.focusFolder",
+          "when": "view == mdStudioFileBrowser && viewItem == mdFolder",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mdStudioFileBrowser.unpin",
+          "when": "view == mdStudioFileBrowser && (viewItem == mdFilePinned || viewItem == mdPinnedFile || viewItem == mdFilterFilePinned || viewItem == mdExtraFilePinned || viewItem == mdExtraPinnedFile || viewItem == mdExtraFilterFilePinned)",
+          "group": "navigation@0"
+        },
+        {
+          "command": "mdStudioFileBrowser.openInEditor",
+          "when": "view == mdStudioFileBrowser && (viewItem == mdFile || viewItem == mdFilePinned || viewItem == mdPinnedFile || viewItem == mdRecentFile || viewItem == mdFilterFile || viewItem == mdFilterFilePinned || viewItem == mdExtraFile || viewItem == mdExtraFilePinned || viewItem == mdExtraPinnedFile || viewItem == mdExtraRecentFile || viewItem == mdExtraFilterFile || viewItem == mdExtraFilterFilePinned)",
+          "group": "navigation@1"
         },
         {
           "command": "mdStudioPreview.openFileInNewPanel",
           "when": "view == mdStudioFileBrowser && (viewItem == mdFile || viewItem == mdFilePinned || viewItem == mdPinnedFile || viewItem == mdRecentFile || viewItem == mdFilterFile || viewItem == mdFilterFilePinned)",
-          "group": "navigation@1"
+          "group": "navigation@2"
         },
         {
           "command": "mdStudioPreview.transformMarkdownToHtml",
           "when": "view == mdStudioFileBrowser && (viewItem == mdFile || viewItem == mdFilePinned || viewItem == mdPinnedFile || viewItem == mdRecentFile || viewItem == mdFilterFile || viewItem == mdFilterFilePinned)",
-          "group": "navigation@2"
-        },
-        {
-          "command": "mdStudioFileBrowser.copyPath",
-          "when": "view == mdStudioFileBrowser && (viewItem == mdFolder || viewItem == mdFile || viewItem == mdFilePinned || viewItem == mdPinnedFile || viewItem == mdRecentFile || viewItem == mdFilterFile || viewItem == mdFilterFilePinned)",
           "group": "navigation@3"
         },
         {
-          "command": "mdStudioFileBrowser.copyRelativePath",
-          "when": "view == mdStudioFileBrowser && (viewItem == mdFolder || viewItem == mdFile || viewItem == mdFilePinned || viewItem == mdPinnedFile || viewItem == mdRecentFile || viewItem == mdFilterFile || viewItem == mdFilterFilePinned)",
+          "command": "mdStudioFileBrowser.copyPath",
+          "when": "view == mdStudioFileBrowser && (viewItem == mdFolder || viewItem == mdFile || viewItem == mdFilePinned || viewItem == mdPinnedFile || viewItem == mdRecentFile || viewItem == mdFilterFile || viewItem == mdFilterFilePinned || viewItem == mdExtraFile || viewItem == mdExtraFilePinned || viewItem == mdExtraPinnedFile || viewItem == mdExtraRecentFile || viewItem == mdExtraFilterFile || viewItem == mdExtraFilterFilePinned)",
           "group": "navigation@4"
         },
         {
-          "command": "mdStudioFileBrowser.copyFileName",
-          "when": "view == mdStudioFileBrowser && (viewItem == mdFolder || viewItem == mdFile || viewItem == mdFilePinned || viewItem == mdPinnedFile || viewItem == mdRecentFile || viewItem == mdFilterFile || viewItem == mdFilterFilePinned)",
+          "command": "mdStudioFileBrowser.copyRelativePath",
+          "when": "view == mdStudioFileBrowser && (viewItem == mdFolder || viewItem == mdFile || viewItem == mdFilePinned || viewItem == mdPinnedFile || viewItem == mdRecentFile || viewItem == mdFilterFile || viewItem == mdFilterFilePinned || viewItem == mdExtraFile || viewItem == mdExtraFilePinned || viewItem == mdExtraPinnedFile || viewItem == mdExtraRecentFile || viewItem == mdExtraFilterFile || viewItem == mdExtraFilterFilePinned)",
           "group": "navigation@5"
         },
         {
-          "command": "mdStudioFileBrowser.hideItem",
-          "when": "view == mdStudioFileBrowser && (viewItem == mdFolder || viewItem == mdFile || viewItem == mdFilePinned || viewItem == mdRecentFile || viewItem == mdFilterFile || viewItem == mdFilterFilePinned)",
+          "command": "mdStudioFileBrowser.copyFileName",
+          "when": "view == mdStudioFileBrowser && (viewItem == mdFolder || viewItem == mdFile || viewItem == mdFilePinned || viewItem == mdPinnedFile || viewItem == mdRecentFile || viewItem == mdFilterFile || viewItem == mdFilterFilePinned || viewItem == mdExtraFile || viewItem == mdExtraFilePinned || viewItem == mdExtraPinnedFile || viewItem == mdExtraRecentFile || viewItem == mdExtraFilterFile || viewItem == mdExtraFilterFilePinned)",
           "group": "navigation@6"
+        },
+        {
+          "command": "mdStudioFileBrowser.hideItem",
+          "when": "view == mdStudioFileBrowser && (viewItem == mdFolder || viewItem == mdFile || viewItem == mdFilePinned || viewItem == mdPinnedFile || viewItem == mdRecentFile || viewItem == mdFilterFile || viewItem == mdFilterFilePinned || viewItem == mdExtraFile || viewItem == mdExtraFilePinned || viewItem == mdExtraPinnedFile || viewItem == mdExtraRecentFile || viewItem == mdExtraFilterFile || viewItem == mdExtraFilterFilePinned)",
+          "group": "navigation@7"
         }
       ],
       "explorer/context": [

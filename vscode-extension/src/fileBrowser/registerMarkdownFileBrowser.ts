@@ -7,6 +7,8 @@ import {
   type FileBrowserSortOrder,
 } from '../providers/markdownFileTreeProvider.js';
 import { MarkdownFileItem } from '../providers/markdownFileItem.js';
+import { registerFolderFocusCommands } from '../commands/focusFolder.js';
+import { isMarkdownFileUri, normalizeFileExtension } from '../utils/markdownFiles.js';
 
 interface FileBrowserSortQuickPickItem extends vscode.QuickPickItem {
   order: FileBrowserSortOrder;
@@ -19,6 +21,11 @@ interface FileBrowserFilterQuickPickItem extends vscode.QuickPickItem {
 interface HiddenQuickPickItem extends vscode.QuickPickItem {
   action: 'clear' | 'unhide';
   fsPath?: string;
+}
+
+interface ExtraExtensionQuickPickItem extends vscode.QuickPickItem {
+  action?: 'add' | 'clear';
+  extension?: string;
 }
 
 export interface MarkdownFileBrowserController {
@@ -54,6 +61,23 @@ const fileBrowserFilterItems: readonly FileBrowserFilterQuickPickItem[] = [
   { label: '큰 파일', description: '용량 상위 20개', mode: 'large' },
 ];
 
+const suggestedExtraExtensions = [
+  '.txt',
+  '.json',
+  '.html',
+  '.css',
+  '.js',
+  '.ts',
+  '.tsx',
+  '.jsx',
+  '.yaml',
+  '.yml',
+  '.csv',
+  '.py',
+  '.toml',
+  '.xml',
+];
+
 export function registerMarkdownFileBrowser(
   context: vscode.ExtensionContext,
   options: RegisterMarkdownFileBrowserOptions,
@@ -65,6 +89,9 @@ export function registerMarkdownFileBrowser(
   });
   context.subscriptions.push(treeView);
   updateDescription(treeView, provider);
+  registerFolderFocusCommands(context, provider, {
+    onDidChangeFocus: () => updateDescription(treeView, provider),
+  });
 
   context.subscriptions.push(
     vscode.commands.registerCommand('mdStudioFileBrowser.refresh', async () => {
@@ -106,8 +133,14 @@ export function registerMarkdownFileBrowser(
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('mdStudioFileBrowser.configureExtensions', async () => {
+      await configureExtraExtensions(provider, treeView);
+    }),
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('mdStudioFileBrowser.pinToTop', async (commandArg?: unknown) => {
-      const uri = await options.resolveMarkdownUri(commandArg);
+      const uri = getResourceUri(commandArg) ?? (await options.resolveMarkdownUri(commandArg));
       if (!uri) return;
       await provider.pinFile(uri);
     }),
@@ -115,9 +148,19 @@ export function registerMarkdownFileBrowser(
 
   context.subscriptions.push(
     vscode.commands.registerCommand('mdStudioFileBrowser.unpin', async (commandArg?: unknown) => {
-      const uri = await options.resolveMarkdownUri(commandArg);
+      const uri = getResourceUri(commandArg) ?? (await options.resolveMarkdownUri(commandArg));
       if (!uri) return;
       await provider.unpinFile(uri);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('mdStudioFileBrowser.openInEditor', async (commandArg?: unknown) => {
+      const uri = getResourceUri(commandArg) ?? (await pickBrowserFile(provider));
+      if (!uri) return;
+      await vscode.commands.executeCommand('vscode.open', uri);
+      await provider.recordRecentFile(uri);
+      revealInTree(treeView, uri);
     }),
   );
 
@@ -180,9 +223,14 @@ export function registerMarkdownFileBrowser(
 
   context.subscriptions.push(
     vscode.commands.registerCommand('mdStudioFileBrowser.search', async () => {
-      const picked = await pickMarkdownFile(provider);
+      const picked = await pickBrowserFile(provider);
       if (!picked) return;
-      await options.openInViewer(picked);
+      if (isMarkdownFileUri(picked)) {
+        await options.openInViewer(picked);
+      } else {
+        await vscode.commands.executeCommand('vscode.open', picked);
+        await provider.recordRecentFile(picked);
+      }
       revealInTree(treeView, picked);
     }),
   );
@@ -253,21 +301,96 @@ function buildHiddenQuickPickItems(hiddenItems: FileBrowserHiddenItem[]): Hidden
   ];
 }
 
-async function pickMarkdownFile(provider: MarkdownFileBrowserProvider): Promise<vscode.Uri | null> {
-  const exclude = '{**/node_modules/**,**/.git/**,**/dist/**,**/.next/**}';
-  const uris = await vscode.workspace.findFiles('**/*.{md,mdx,markdown,mdown,mkd,mkdn}', exclude);
+async function configureExtraExtensions(
+  provider: MarkdownFileBrowserProvider,
+  treeView: vscode.TreeView<MarkdownFileItem>,
+): Promise<void> {
+  const current = provider.getExtraExtensions();
+  const candidateExtensions = [...current, ...suggestedExtraExtensions].filter(
+    (extension, index, all) => all.indexOf(extension) === index,
+  );
+  const picked = await vscode.window.showQuickPick(
+    [
+      {
+        label: '$(add) 직접 추가...',
+        description: '예: txt, html, json',
+        action: 'add' as const,
+        alwaysShow: true,
+      },
+      {
+        label: '$(clear-all) 추가 확장자 모두 해제',
+        description: current.length ? current.join(', ') : '설정된 추가 확장자가 없습니다',
+        action: 'clear' as const,
+        alwaysShow: true,
+      },
+      ...candidateExtensions.map((extension) => ({
+        label: extension,
+        description: current.includes(extension) ? '현재 표시 중' : '클릭해서 표시',
+        picked: current.includes(extension),
+        extension,
+      })),
+    ] satisfies ExtraExtensionQuickPickItem[],
+    {
+      canPickMany: true,
+      matchOnDescription: true,
+      placeHolder: 'MD Studio File Browser에 추가로 보여줄 확장자를 선택하세요. Markdown은 항상 표시됩니다.',
+    },
+  );
+  if (!picked) return;
+
+  const selected = picked as ExtraExtensionQuickPickItem[];
+  let nextExtensions = selected
+    .map((item) => item.extension)
+    .filter((extension): extension is string => Boolean(extension));
+
+  if (selected.some((item) => item.action === 'clear')) {
+    nextExtensions = [];
+  }
+
+  if (selected.some((item) => item.action === 'add')) {
+    const input = await vscode.window.showInputBox({
+      title: '추가 확장자 입력',
+      prompt: '점은 있어도 없어도 됩니다. 예: txt, html, json',
+      placeHolder: 'txt',
+      validateInput(value) {
+        return normalizeFileExtension(value) ? null : '영문/숫자/하이픈/언더스코어 확장자만 사용할 수 있습니다.';
+      },
+    });
+    const customExtension = normalizeFileExtension(input);
+    if (customExtension && !nextExtensions.includes(customExtension)) {
+      nextExtensions.push(customExtension);
+    }
+  }
+
+  await provider.setExtraExtensions(nextExtensions);
+  updateDescription(treeView, provider);
+  const enabled = provider.getExtraExtensions();
+  void vscode.window.showInformationMessage(
+    enabled.length
+      ? `추가 확장자를 표시합니다: ${enabled.join(', ')}`
+      : '추가 확장자 표시를 해제했습니다. Markdown 파일은 계속 표시됩니다.',
+  );
+}
+
+async function pickBrowserFile(provider: MarkdownFileBrowserProvider): Promise<vscode.Uri | null> {
+  const uris = await provider.findVisibleFiles();
   const folders = vscode.workspace.workspaceFolders;
   const items = uris
-    .filter((uri) => !provider.isHiddenByRule(uri))
     .map((uri) => {
       const rel = folders?.length ? vscode.workspace.asRelativePath(uri, folders.length > 1) : uri.fsPath;
-      return { label: path.basename(uri.fsPath), description: path.dirname(rel), uri };
+      return {
+        label: path.basename(uri.fsPath),
+        description: path.dirname(rel),
+        detail: isMarkdownFileUri(uri) ? 'Open in Viewer' : 'Open in Editor',
+        uri,
+      };
     })
     .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
 
   const picked = await vscode.window.showQuickPick(items, {
-    placeHolder: 'Search markdown files...',
+    placeHolder: `Search MD Studio files (${provider.getExtensionDescription()})...`,
     matchOnDescription: true,
+    matchOnDetail: true,
   });
   return picked?.uri ?? null;
 }

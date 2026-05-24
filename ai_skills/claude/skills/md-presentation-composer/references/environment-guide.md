@@ -112,6 +112,8 @@ When transforming a document into slides, use this mapping to decide how much so
 
 Avoid writing content that depends on these — the renderer will silently fail or produce broken output.
 
+- **Raw HTML as authoring syntax** — do not write `<div>`, `<span>`, `<br>`, `<iframe>`, `<video>`, or custom HTML wrappers; use Markdown and MPS templates instead
+- **Collapsible details** — existing `<details>/<summary>` blocks are rendered as always-visible static note callouts for compatibility, not as interactive disclosure UI
 - **Animated transitions** — no slide animations; each page is static HTML
 - **Speaker notes** — no separate notes area; notes become visible slide content
 - **Embedded video** — `<video>` tags are stripped; use an image thumbnail instead

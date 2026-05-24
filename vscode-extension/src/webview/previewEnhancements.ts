@@ -1,8 +1,17 @@
 export type PreferredViewMode = 'auto' | 'slides' | 'stack';
 
+interface AppearanceOptions {
+  appearance: 'default' | 'clean' | 'flat' | 'reader' | 'print';
+  appearanceBackground: 'default' | 'plain' | 'transparent';
+  appearanceRadius: 'default' | 'soft' | 'none';
+  appearanceFrame: 'default' | 'lines' | 'none';
+  viewerChrome: 'full' | 'minimal' | 'hidden';
+}
+
 interface PreviewEnhancementOptions {
   preferredViewMode: PreferredViewMode;
   outlineCollapsed: boolean;
+  appearance: AppearanceOptions;
 }
 
 export function injectPreviewEnhancements(html: string, options: PreviewEnhancementOptions): string {
@@ -125,7 +134,7 @@ body.mps-compact-chrome #mps-search-input {
 </style>`;
 }
 
-function buildBridgeScript({ preferredViewMode, outlineCollapsed }: PreviewEnhancementOptions): string {
+function buildBridgeScript({ preferredViewMode, outlineCollapsed, appearance }: PreviewEnhancementOptions): string {
   return `
 <script>
 (function () {
@@ -133,13 +142,16 @@ function buildBridgeScript({ preferredViewMode, outlineCollapsed }: PreviewEnhan
   window.__mdStudioPreviewSyncInstalled = true;
   const preferredViewMode = ${JSON.stringify(preferredViewMode)};
   const initialOutlineCollapsed = ${outlineCollapsed ? 'true' : 'false'};
+  const initialAppearance = ${JSON.stringify(appearance)};
   const vscodeApi = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
   let userChangedMode = false;
   let autoChangingMode = false;
   let autoChangingOutline = false;
   let stackFitActive = false;
+  let stackFillActive = false;
   let stackZoomOverride = null;
   let slideFitActive = true;
+  let slideFillActive = false;
   let slideZoomOverride = null;
   const ZOOM_MIN = 0.25;
   const ZOOM_MAX = 2;
@@ -151,6 +163,12 @@ function buildBridgeScript({ preferredViewMode, outlineCollapsed }: PreviewEnhan
   const notifyReady = () => post({ type: 'mdStudioPreview.ready' });
   const notifyOutlineState = (collapsed) =>
     post({ type: 'mdStudioPreview.outlineStateChanged', collapsed: Boolean(collapsed) });
+  const notifyAppearanceState = (nextAppearance) =>
+    post({ type: 'mdStudioPreview.appearanceChanged', appearance: nextAppearance });
+  window.addEventListener('mdStudioAppearanceChanged', (event) => {
+    const detail = event && event.detail ? event.detail : initialAppearance;
+    notifyAppearanceState(detail);
+  });
 
   const getOutlineCollapsed = (outline) => Boolean(outline && outline.classList.contains('is-collapsed'));
   const shouldStack = () =>
@@ -235,43 +253,89 @@ function buildBridgeScript({ preferredViewMode, outlineCollapsed }: PreviewEnhan
     return Number.isFinite(nextScale) ? clampZoom(nextScale) : 1;
   }
 
-  function updateZoomUi(scale, fit) {
+  function getSlideFillScale() {
+    const root = getSlideRoot();
+    if (!root) return 1;
+    const activePage = root.querySelector('.doc-page.is-slide-active') || root.querySelector('.doc-page');
+    const currentScale = getSlideScale();
+    const rect = activePage ? activePage.getBoundingClientRect() : root.getBoundingClientRect();
+    const width = readCssNumber(root, '--page-width', rect.width / Math.max(0.1, currentScale) || 980);
+    const availableWidth = Math.max(120, window.innerWidth - getBodyHorizontalPadding() - 16);
+    const nextScale = availableWidth / Math.max(1, width);
+    return Number.isFinite(nextScale) ? clampZoom(nextScale) : 1;
+  }
+
+  function updateZoomUi(scale, mode) {
     const nav = document.querySelector('.export-slide-nav');
     const label = nav ? nav.querySelector('.zoom-label') : null;
     const fitBtn = nav ? nav.querySelector('[data-action="zoom-fit"]') : null;
+    const fillBtn = nav ? nav.querySelector('[data-action="zoom-fill"]') : null;
     if (label) {
-      label.textContent = fit ? 'Fit (' + Math.round(scale * 100) + '%)' : Math.round(scale * 100) + '%';
+      const pct = Math.round(scale * 100);
+      if (mode === 'fit') label.textContent = 'Fit (' + pct + '%)';
+      else if (mode === 'fill') label.textContent = 'Fill (' + pct + '%)';
+      else label.textContent = pct + '%';
     }
-    if (fitBtn) fitBtn.classList.toggle('is-active', Boolean(fit));
+    if (fitBtn) fitBtn.classList.toggle('is-active', mode === 'fit');
+    if (fillBtn) {
+      fillBtn.classList.toggle('is-active', mode === 'fill' && !isStackedView());
+      fillBtn.hidden = isStackedView();
+    }
   }
 
-  function applyStackZoom(scale, fit) {
+  function applyStackZoom(scale, mode) {
     const nextScale = clampZoom(scale);
     stackZoomOverride = nextScale;
-    stackFitActive = Boolean(fit);
+    stackFitActive = mode === 'fit';
+    stackFillActive = mode === 'fill';
     document.documentElement.style.setProperty('--stacked-zoom', String(nextScale));
-    updateZoomUi(nextScale, fit);
+    updateZoomUi(nextScale, mode);
     updateResponsiveClasses();
   }
 
   function applyStackFit() {
-    applyStackZoom(getStackFitScale(), true);
+    applyStackZoom(getStackFitScale(), 'fit');
   }
 
-  function applySlideZoom(scale, fit) {
+  function applyStackFill() {
+    applyStackZoom(getStackFitScale(), 'fit');
+  }
+
+  function applySlideZoom(scale, mode) {
     const root = getSlideRoot();
     if (!root) return;
     const nextScale = clampZoom(scale);
     slideZoomOverride = nextScale;
-    slideFitActive = Boolean(fit);
+    slideFitActive = mode === 'fit';
+    slideFillActive = mode === 'fill';
     root.style.setProperty('--page-scale', String(nextScale));
-    updateZoomUi(nextScale, fit);
-    document.body.classList.toggle('export-slides-overflow', !fit && nextScale > getSlideFitScale() * 1.01);
+    updateZoomUi(nextScale, mode);
+    document.body.classList.toggle('export-slides-overflow', mode !== 'fit' && nextScale > getSlideFitScale() * 1.01);
     updateResponsiveClasses();
   }
 
   function applySlideFit() {
-    applySlideZoom(getSlideFitScale(), true);
+    applySlideZoom(getSlideFitScale(), 'fit');
+  }
+
+  function applySlideFill() {
+    applySlideZoom(getSlideFillScale(), 'fill');
+  }
+
+  function resetZoomForModeSwitch() {
+    stackFitActive = false;
+    stackFillActive = false;
+    stackZoomOverride = null;
+    slideFitActive = true;
+    slideFillActive = false;
+    slideZoomOverride = null;
+    document.documentElement.style.setProperty('--stacked-zoom', '1');
+    const root = getSlideRoot();
+    if (root) root.style.removeProperty('--page-scale');
+    document.body.classList.remove('export-slides-overflow');
+    window.scrollTo({ left: 0, top: 0, behavior: 'auto' });
+    if (isStackedView()) updateZoomUi(1, 'fit');
+    else applySlideFit();
   }
 
   function adjustZoom(current, delta) {
@@ -281,11 +345,11 @@ function buildBridgeScript({ preferredViewMode, outlineCollapsed }: PreviewEnhan
   }
 
   function adjustStackZoom(delta) {
-    applyStackZoom(adjustZoom(getStackScale(), delta), false);
+    applyStackZoom(adjustZoom(getStackScale(), delta), 'manual');
   }
 
   function adjustSlideZoom(delta) {
-    applySlideZoom(adjustZoom(getSlideScale(), delta), false);
+    applySlideZoom(adjustZoom(getSlideScale(), delta), 'manual');
   }
 
   function clampZoom(scale) {
@@ -299,6 +363,7 @@ function buildBridgeScript({ preferredViewMode, outlineCollapsed }: PreviewEnhan
     nav.setAttribute('data-md-studio-fit-bound', '1');
 
     const fitBtn = nav.querySelector('[data-action="zoom-fit"]');
+    const fillBtn = nav.querySelector('[data-action="zoom-fill"]');
     const zoomIn = nav.querySelector('[data-action="zoom-in"]');
     const zoomOut = nav.querySelector('[data-action="zoom-out"]');
     const prev = nav.querySelector('[data-action="prev"]');
@@ -310,6 +375,13 @@ function buildBridgeScript({ preferredViewMode, outlineCollapsed }: PreviewEnhan
       event.stopImmediatePropagation();
       if (isStackedView()) applyStackFit();
       else applySlideFit();
+    }, true);
+
+    fillBtn?.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (isStackedView()) applyStackFill();
+      else applySlideFill();
     }, true);
 
     zoomIn?.addEventListener('click', (event) => {
@@ -326,9 +398,15 @@ function buildBridgeScript({ preferredViewMode, outlineCollapsed }: PreviewEnhan
       else adjustSlideZoom(-1);
     }, true);
 
-    for (const button of [prev, next, toggle]) {
+    for (const button of [prev, next]) {
       button?.addEventListener('click', () => window.setTimeout(applyResponsiveState, 0));
     }
+    toggle?.addEventListener('click', () => {
+      window.setTimeout(() => {
+        resetZoomForModeSwitch();
+        applyResponsiveState();
+      }, 0);
+    });
   }
 
   function setOutlineCollapsed(outline, collapsed) {
@@ -396,14 +474,18 @@ function buildBridgeScript({ preferredViewMode, outlineCollapsed }: PreviewEnhan
       autoChangingOutline = false;
     }
 
-    if (isStackedView() && stackFitActive) {
+    if (isStackedView() && stackFillActive) {
+      applyStackFill();
+    } else if (isStackedView() && stackFitActive) {
       applyStackFit();
     } else if (isStackedView() && stackZoomOverride != null) {
-      applyStackZoom(stackZoomOverride, false);
+      applyStackZoom(stackZoomOverride, 'manual');
+    } else if (!isStackedView() && slideFillActive) {
+      applySlideFill();
     } else if (!isStackedView() && slideFitActive) {
       applySlideFit();
     } else if (!isStackedView() && slideZoomOverride != null) {
-      applySlideZoom(slideZoomOverride, false);
+      applySlideZoom(slideZoomOverride, 'manual');
     }
   }
 
@@ -480,6 +562,13 @@ function buildBridgeScript({ preferredViewMode, outlineCollapsed }: PreviewEnhan
       event.stopImmediatePropagation();
       if (isStackedView()) applyStackFit();
       else applySlideFit();
+      return;
+    }
+    if (event.key === '9') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (isStackedView()) applyStackFill();
+      else applySlideFill();
       return;
     }
     if (event.key === '=' || event.key === '+') {

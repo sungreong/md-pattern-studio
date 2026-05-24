@@ -1,4 +1,13 @@
 import { escapeHtml } from './engine.js';
+import {
+  APPEARANCE_BACKGROUND_OPTIONS,
+  APPEARANCE_FRAME_OPTIONS,
+  APPEARANCE_PRESET_OPTIONS,
+  APPEARANCE_RADIUS_OPTIONS,
+  VIEWER_CHROME_OPTIONS,
+  buildAppearanceBodyAttributes,
+  normalizeAppearanceOptions,
+} from './appearance.js';
 
 const DEFAULT_PAGE_WIDTH = '1120px';
 const DEFAULT_PAGE_HEIGHT = '720px';
@@ -31,7 +40,41 @@ function buildOutlineHtml(items = []) {
 </aside>`;
 }
 
-function buildEnhancementScript({ mermaid = true } = {}) {
+function buildStyleMenuHtml(appearanceOptions = {}) {
+  const normalized = normalizeAppearanceOptions(appearanceOptions);
+  const select = (name, label, options, selectedValue) => `
+    <label>
+      <span>${escapeHtml(label)}</span>
+      <select data-appearance-control="${escapeHtml(name)}">
+        ${options
+          .map(
+            (item) =>
+              `<option value="${escapeHtml(item.value)}"${item.value === selectedValue ? ' selected' : ''}>${escapeHtml(item.label)}</option>`,
+          )
+          .join('')}
+      </select>
+    </label>`;
+
+  return `
+<details class="export-style-menu" data-export-style-menu>
+  <summary>Style</summary>
+  <div class="style-menu-grid">
+    ${select('appearance', 'Preset', APPEARANCE_PRESET_OPTIONS, normalized.appearance)}
+    ${select('appearanceBackground', 'Background', APPEARANCE_BACKGROUND_OPTIONS, normalized.appearanceBackground)}
+    ${select('appearanceRadius', 'Corners', APPEARANCE_RADIUS_OPTIONS, normalized.appearanceRadius)}
+    ${select('appearanceFrame', 'Frame', APPEARANCE_FRAME_OPTIONS, normalized.appearanceFrame)}
+    ${select('viewerChrome', 'Chrome', VIEWER_CHROME_OPTIONS, normalized.viewerChrome)}
+  </div>
+</details>`;
+}
+
+function buildEnhancementScript({ mermaid = true, appearanceOptions = {} } = {}) {
+  const normalizedAppearance = normalizeAppearanceOptions(appearanceOptions);
+  const appearanceValues = APPEARANCE_PRESET_OPTIONS.map((item) => item.value);
+  const backgroundValues = APPEARANCE_BACKGROUND_OPTIONS.map((item) => item.value);
+  const radiusValues = APPEARANCE_RADIUS_OPTIONS.map((item) => item.value);
+  const frameValues = APPEARANCE_FRAME_OPTIONS.map((item) => item.value);
+  const chromeValues = VIEWER_CHROME_OPTIONS.map((item) => item.value);
   return `
 (() => {
   try {
@@ -46,6 +89,115 @@ function buildEnhancementScript({ mermaid = true } = {}) {
         .split('\\\\t')
         .join('')
         .trim();
+
+    const appearanceValues = ${JSON.stringify(appearanceValues)};
+    const backgroundValues = ${JSON.stringify(backgroundValues)};
+    const radiusValues = ${JSON.stringify(radiusValues)};
+    const frameValues = ${JSON.stringify(frameValues)};
+    const chromeValues = ${JSON.stringify(chromeValues)};
+    const defaultAppearance = ${JSON.stringify(normalizedAppearance)};
+
+    function normalizeChoice(value, allowed, fallback) {
+      const normalized = String(value || '').trim().toLowerCase();
+      return allowed.indexOf(normalized) >= 0 ? normalized : fallback;
+    }
+
+    function normalizeAppearance(raw) {
+      const value = raw || {};
+      return {
+        appearance: normalizeChoice(value.appearance, appearanceValues, 'default'),
+        appearanceBackground: normalizeChoice(value.appearanceBackground, backgroundValues, 'default'),
+        appearanceRadius: normalizeChoice(value.appearanceRadius, radiusValues, 'default'),
+        appearanceFrame: normalizeChoice(value.appearanceFrame, frameValues, 'default'),
+        viewerChrome: normalizeChoice(value.viewerChrome, chromeValues, 'full'),
+      };
+    }
+
+    function removePrefixedClasses(node, prefixes) {
+      if (!node || !node.classList) return;
+      Array.from(node.classList).forEach((name) => {
+        if (prefixes.some((prefix) => name === prefix || name.startsWith(prefix + '-'))) {
+          node.classList.remove(name);
+        }
+      });
+    }
+
+    function setDataAttr(node, name, value, defaultValue) {
+      if (!node) return;
+      if (!value || value === defaultValue) {
+        node.removeAttribute(name);
+      } else {
+        node.setAttribute(name, value);
+      }
+    }
+
+    function applyAppearance(raw) {
+      const next = normalizeAppearance(raw);
+      const root = document.querySelector('.studio-document');
+      const prefixes = ['appearance', 'appearance-bg', 'appearance-radius', 'appearance-frame'];
+      removePrefixedClasses(root, prefixes);
+      removePrefixedClasses(document.body, prefixes.concat(['viewer-chrome']));
+
+      if (next.appearance !== 'default') {
+        root && root.classList.add('appearance-' + next.appearance);
+        document.body.classList.add('appearance-' + next.appearance);
+      }
+      if (next.appearanceBackground !== 'default') {
+        root && root.classList.add('appearance-bg-' + next.appearanceBackground);
+        document.body.classList.add('appearance-bg-' + next.appearanceBackground);
+      }
+      if (next.appearanceRadius !== 'default') {
+        root && root.classList.add('appearance-radius-' + next.appearanceRadius);
+        document.body.classList.add('appearance-radius-' + next.appearanceRadius);
+      }
+      if (next.appearanceFrame !== 'default') {
+        root && root.classList.add('appearance-frame-' + next.appearanceFrame);
+        document.body.classList.add('appearance-frame-' + next.appearanceFrame);
+      }
+      if (next.viewerChrome !== 'full') {
+        document.body.classList.add('viewer-chrome-' + next.viewerChrome);
+      }
+
+      setDataAttr(root, 'data-appearance', next.appearance, 'default');
+      setDataAttr(root, 'data-appearance-background', next.appearanceBackground, 'default');
+      setDataAttr(root, 'data-appearance-radius', next.appearanceRadius, 'default');
+      setDataAttr(root, 'data-appearance-frame', next.appearanceFrame, 'default');
+      setDataAttr(document.body, 'data-appearance', next.appearance, 'default');
+      setDataAttr(document.body, 'data-appearance-background', next.appearanceBackground, 'default');
+      setDataAttr(document.body, 'data-appearance-radius', next.appearanceRadius, 'default');
+      setDataAttr(document.body, 'data-appearance-frame', next.appearanceFrame, 'default');
+      setDataAttr(document.body, 'data-viewer-chrome', next.viewerChrome, 'full');
+      window.dispatchEvent(new CustomEvent('mdStudioAppearanceChanged', { detail: next }));
+      return next;
+    }
+
+    function readAppearanceControls(menu) {
+      const read = (name) => {
+        const control = menu && menu.querySelector('[data-appearance-control="' + name + '"]');
+        return control ? control.value : '';
+      };
+      return normalizeAppearance({
+        appearance: read('appearance') || defaultAppearance.appearance,
+        appearanceBackground: read('appearanceBackground') || defaultAppearance.appearanceBackground,
+        appearanceRadius: read('appearanceRadius') || defaultAppearance.appearanceRadius,
+        appearanceFrame: read('appearanceFrame') || defaultAppearance.appearanceFrame,
+        viewerChrome: read('viewerChrome') || defaultAppearance.viewerChrome,
+      });
+    }
+
+    function bindStyleMenu() {
+      const menu = document.querySelector('[data-export-style-menu]');
+      if (!menu || menu.hasAttribute('data-appearance-bound')) return;
+      menu.setAttribute('data-appearance-bound', '1');
+      menu.addEventListener('change', (event) => {
+        const target = event.target;
+        if (!target || !target.matches || !target.matches('[data-appearance-control]')) return;
+        applyAppearance(readAppearanceControls(menu));
+      });
+      applyAppearance(readAppearanceControls(menu));
+    }
+
+    bindStyleMenu();
 
     const rawPages = Array.from(document.querySelectorAll('.doc-page'));
     const isMeaningful = (page) => {
@@ -101,11 +253,14 @@ function buildEnhancementScript({ mermaid = true } = {}) {
     let observer = null;
     let zoomLevel = null;
     let autoFitScale = 1;
+    let autoFillScale = 1;
+    let autoZoomMode = 'fit';
     const ZOOM_STEPS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
     let zoomLabel = null;
     let zoomInBtn = null;
     let zoomOutBtn = null;
     let fitBtn = null;
+    let fillBtn = null;
     let pageSep = null;
     let zoomSep = null;
     const rootDocument = document.querySelector('.studio-document');
@@ -180,16 +335,18 @@ function buildEnhancementScript({ mermaid = true } = {}) {
       if (!zoomLabel) return;
       const isStacked = document.body.classList.contains('export-stacked');
       if (zoomLevel == null) {
+        const scale = autoZoomMode === 'fill' ? autoFillScale : isStacked ? 1 : autoFitScale;
+        const pct = Math.round(scale * 100);
         if (isStacked) {
-          zoomLabel.textContent = '100%';
+          zoomLabel.textContent = autoZoomMode === 'fill' ? 'Fill (' + pct + '%)' : pct + '%';
         } else {
-          const pct = Math.round(autoFitScale * 100);
-          zoomLabel.textContent = 'Fit (' + pct + '%)';
+          zoomLabel.textContent = autoZoomMode === 'fill' ? 'Fill (' + pct + '%)' : 'Fit (' + pct + '%)';
         }
       } else {
         zoomLabel.textContent = Math.round(zoomLevel * 100) + '%';
       }
-      if (fitBtn) fitBtn.classList.toggle('is-active', zoomLevel == null);
+      if (fitBtn) fitBtn.classList.toggle('is-active', zoomLevel == null && autoZoomMode === 'fit');
+      if (fillBtn) fillBtn.classList.toggle('is-active', zoomLevel == null && autoZoomMode === 'fill');
     }
 
     function updateControlState() {
@@ -207,6 +364,7 @@ function buildEnhancementScript({ mermaid = true } = {}) {
         toggle.textContent = isStacked ? 'Slides' : 'Stack';
       }
       if (fitBtn) fitBtn.hidden = false;
+      if (fillBtn) fillBtn.hidden = isStacked;
       if (zoomSep) zoomSep.hidden = false;
     }
 
@@ -215,21 +373,37 @@ function buildEnhancementScript({ mermaid = true } = {}) {
       updateScale();
     }
 
+    function applyAutoZoom(mode) {
+      const isStacked = document.body.classList.contains('export-stacked');
+      autoZoomMode = mode === 'fill' && !isStacked ? 'fill' : 'fit';
+      applyZoom(null);
+    }
+
+    function getCurrentAutoScale(isStacked) {
+      if (autoZoomMode === 'fill') return autoFillScale;
+      return isStacked ? 1 : autoFitScale;
+    }
+
+    function clampZoom(scale) {
+      const parsed = Number(scale);
+      if (!Number.isFinite(parsed) || parsed <= 0) return 1;
+      return Math.max(0.25, Math.min(2, Number(parsed.toFixed(4))));
+    }
+
     function zoomIn() {
       const isStacked = document.body.classList.contains('export-stacked');
-      const current = zoomLevel != null ? zoomLevel : (isStacked ? 1 : autoFitScale);
+      const current = zoomLevel != null ? zoomLevel : getCurrentAutoScale(isStacked);
       const nxt = ZOOM_STEPS.find((s) => s > current + 0.001);
       if (nxt != null) applyZoom(nxt);
     }
 
     function zoomOut() {
       const isStacked = document.body.classList.contains('export-stacked');
-      if (zoomLevel == null) return;
-      const current = zoomLevel;
+      const current = zoomLevel != null ? zoomLevel : getCurrentAutoScale(isStacked);
       const steps = ZOOM_STEPS.slice().reverse();
       const prv = steps.find((s) => s < current - 0.001);
       if (prv != null) {
-        if (!isStacked && prv <= autoFitScale + 0.001) {
+        if (!isStacked && autoZoomMode === 'fit' && prv <= autoFitScale + 0.001) {
           applyZoom(null);
         } else {
           applyZoom(prv);
@@ -242,10 +416,18 @@ function buildEnhancementScript({ mermaid = true } = {}) {
     function updateScale() {
       if (!rootDocument) return;
       const isStacked = document.body.classList.contains('export-stacked');
+      const basePadding = parseFloat(getComputedStyle(document.body).paddingLeft || '0');
+      const bodyPadding = basePadding * 2;
+      const navHeight = 60;
+      const availableWidth = Math.max(120, window.innerWidth - bodyPadding - 8);
 
       if (isStacked) {
+        autoFillScale = 1;
+        if (autoZoomMode === 'fill') autoZoomMode = 'fit';
         const scale = zoomLevel != null ? zoomLevel : 1;
         document.documentElement.style.setProperty('--stacked-zoom', String(scale));
+        rootDocument.style.removeProperty('--page-scale');
+        document.body.classList.remove('export-slides-overflow');
         document.body.style.paddingRight = '';
         updateZoomDisplay();
         return;
@@ -258,19 +440,17 @@ function buildEnhancementScript({ mermaid = true } = {}) {
         rootDocument.style.setProperty('--page-scale', '1');
         document.body.style.paddingRight = '';
         autoFitScale = 1;
+        autoFillScale = 1;
         updateZoomDisplay();
         return;
       }
-      const basePadding = parseFloat(getComputedStyle(document.body).paddingLeft || '0');
-      const bodyPadding = basePadding * 2;
-      const navHeight = 60;
-      const availableWidth = Math.max(120, window.innerWidth - bodyPadding - 8);
       const availableHeight = Math.max(120, window.innerHeight - navHeight - 40);
       const fitScale = Math.min(1, availableWidth / width, availableHeight / height);
       autoFitScale = Number.isFinite(fitScale) && fitScale > 0 ? fitScale : 1;
-      const finalScale = zoomLevel != null ? zoomLevel : autoFitScale;
+      autoFillScale = clampZoom(availableWidth / Math.max(1, width));
+      const finalScale = zoomLevel != null ? zoomLevel : autoZoomMode === 'fill' ? autoFillScale : autoFitScale;
       rootDocument.style.setProperty('--page-scale', String(finalScale));
-      document.body.classList.toggle('export-slides-overflow', zoomLevel != null && zoomLevel > autoFitScale * 1.01);
+      document.body.classList.toggle('export-slides-overflow', finalScale > autoFitScale * 1.01);
       document.body.style.paddingRight = '';
       updateZoomDisplay();
     }
@@ -321,7 +501,21 @@ function buildEnhancementScript({ mermaid = true } = {}) {
       goToPage(index + delta);
     }
 
+    function resetZoomForModeSwitch(stacked) {
+      zoomLevel = null;
+      autoZoomMode = 'fit';
+      autoFillScale = 1;
+      document.body.classList.remove('export-slides-overflow');
+      document.documentElement.style.setProperty('--stacked-zoom', '1');
+      if (rootDocument) {
+        rootDocument.style.removeProperty('--page-scale');
+      }
+      window.scrollTo({ left: 0, top: 0, behavior: 'auto' });
+    }
+
     function switchMode(stacked) {
+      const wasStacked = document.body.classList.contains('export-stacked');
+      if (wasStacked !== stacked) resetZoomForModeSwitch(stacked);
       document.body.classList.toggle('export-stacked', stacked);
       document.body.classList.toggle('export-slides', !stacked && pages.length > 1);
       updateControlState();
@@ -346,6 +540,7 @@ function buildEnhancementScript({ mermaid = true } = {}) {
       '<span class="zoom-label">Fit</span>' +
       '<button type="button" data-action="zoom-in" title="Zoom In (Ctrl+=)">+</button>' +
       '<button type="button" data-action="zoom-fit" title="Fit to Window (Ctrl+0)">Fit</button>' +
+      '<button type="button" data-action="zoom-fill" title="Fill Width (Ctrl+9)">Fill</button>' +
       '<span class="nav-sep nav-sep-zoom"></span>' +
       '<button type="button" data-action="toggle">Stack</button>';
     document.body.appendChild(nav);
@@ -357,6 +552,7 @@ function buildEnhancementScript({ mermaid = true } = {}) {
     zoomInBtn = nav.querySelector('[data-action="zoom-in"]');
     zoomOutBtn = nav.querySelector('[data-action="zoom-out"]');
     fitBtn = nav.querySelector('[data-action="zoom-fit"]');
+    fillBtn = nav.querySelector('[data-action="zoom-fill"]');
     pageSep = nav.querySelector('.nav-sep-pages');
     zoomSep = nav.querySelector('.nav-sep-zoom');
     prev.addEventListener('click', () => move(-1));
@@ -366,7 +562,8 @@ function buildEnhancementScript({ mermaid = true } = {}) {
     });
     zoomInBtn.addEventListener('click', zoomIn);
     zoomOutBtn.addEventListener('click', zoomOut);
-    fitBtn.addEventListener('click', () => applyZoom(null));
+    fitBtn.addEventListener('click', () => applyAutoZoom('fit'));
+    fillBtn.addEventListener('click', () => applyAutoZoom('fill'));
 
     if (pages.length >= 2) {
       document.body.classList.add('has-js-slides');
@@ -481,7 +678,12 @@ function buildEnhancementScript({ mermaid = true } = {}) {
       }
       if (ctrl && event.key === '0') {
         event.preventDefault();
-        applyZoom(null);
+        applyAutoZoom('fit');
+        return;
+      }
+      if (ctrl && event.key === '9') {
+        event.preventDefault();
+        applyAutoZoom('fill');
         return;
       }
       if (!ctrl) {
@@ -612,7 +814,12 @@ export function buildStandaloneHtmlDocument({
   outlineItems = [],
   enableMermaid = true,
   exportWarnings = [],
+  appearance = {},
 } = {}) {
+  const normalizedAppearance = normalizeAppearanceOptions(appearance);
+  const bodyAttrs = buildAppearanceBodyAttributes(normalizedAppearance);
+  const bodyClass = bodyAttrs.className ? ` class="${escapeHtml(bodyAttrs.className)}"` : '';
+  const bodyData = bodyAttrs.attrs ? ` ${bodyAttrs.attrs}` : '';
   const fallbackNav =
     pageCount > 1
       ? `
@@ -622,6 +829,7 @@ export function buildStandaloneHtmlDocument({
 </nav>`
       : '';
   const outlineHtml = buildOutlineHtml(outlineItems);
+  const styleMenuHtml = buildStyleMenuHtml(normalizedAppearance);
   const warningItems = Array.isArray(exportWarnings) ? exportWarnings.filter(Boolean) : [];
   const warningHtml = warningItems.length
     ? `
@@ -642,6 +850,18 @@ export function buildStandaloneHtmlDocument({
       padding: 24px;
       background: #edf2f9;
       font-family: Inter, Pretendard, 'Noto Sans KR', system-ui, sans-serif;
+    }
+    body.appearance-clean,
+    body.appearance-flat,
+    body.appearance-reader {
+      background: #f8fafc;
+    }
+    body.appearance-print,
+    body.appearance-bg-plain {
+      background: #ffffff;
+    }
+    body.appearance-bg-transparent {
+      background: transparent;
     }
     ${cssText}
     body.export-slides {
@@ -730,10 +950,69 @@ export function buildStandaloneHtmlDocument({
       font-variant-numeric: tabular-nums;
       color: #5b677c;
     }
-    .export-slide-nav button[data-action="zoom-fit"].is-active {
+    .export-slide-nav button[data-action="zoom-fit"].is-active,
+    .export-slide-nav button[data-action="zoom-fill"].is-active {
       background: rgba(58, 99, 214, 0.12);
       border-color: rgba(58, 99, 214, 0.4);
       color: #3a63d6;
+    }
+    .export-style-menu {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      z-index: 32;
+      width: min(238px, calc(100vw - 28px));
+      color: #1e293b;
+      font-size: 12px;
+      font-family: Inter, Pretendard, 'Noto Sans KR', system-ui, sans-serif;
+    }
+    .export-style-menu summary {
+      width: max-content;
+      list-style: none;
+      cursor: pointer;
+      border: 1px solid rgba(191, 203, 222, 0.88);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.92);
+      padding: 8px 12px;
+      box-shadow: 0 2px 12px rgba(30, 41, 59, 0.09);
+      backdrop-filter: blur(8px);
+      font-weight: 800;
+    }
+    .export-style-menu summary::-webkit-details-marker {
+      display: none;
+    }
+    .export-style-menu[open] summary {
+      margin-bottom: 8px;
+    }
+    .export-style-menu .style-menu-grid {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid rgba(191, 203, 222, 0.88);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 10px 28px rgba(30, 41, 59, 0.14);
+      backdrop-filter: blur(10px);
+    }
+    .export-style-menu label {
+      display: grid;
+      grid-template-columns: 76px minmax(0, 1fr);
+      align-items: center;
+      gap: 8px;
+    }
+    .export-style-menu label span {
+      color: #5b677c;
+      font-weight: 700;
+    }
+    .export-style-menu select {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid rgba(191, 203, 222, 0.9);
+      border-radius: 7px;
+      background: #f8fafc;
+      color: #1e293b;
+      padding: 6px 8px;
+      font: inherit;
     }
     body.export-stacked .studio-document {
       transform-origin: top center;
@@ -883,7 +1162,7 @@ export function buildStandaloneHtmlDocument({
       padding: 24px 24px 84px;
     }
     body.export-stacked .studio-document {
-      width: auto;
+      width: calc(100% / var(--stacked-zoom, 1));
       height: auto;
     }
     body.export-stacked .document-shell.is-paginated {
@@ -912,6 +1191,24 @@ export function buildStandaloneHtmlDocument({
     }
     body.export-stacked .doc-page-footer {
       display: none;
+    }
+    body.viewer-chrome-minimal .export-outline:not(.is-collapsed) {
+      width: auto;
+      max-width: 160px;
+    }
+    body.viewer-chrome-minimal .export-outline .outline-current,
+    body.viewer-chrome-minimal .export-outline .outline-links,
+    body.viewer-chrome-minimal .export-fallback-nav {
+      display: none !important;
+    }
+    body.viewer-chrome-minimal .export-slide-nav {
+      opacity: 0.72;
+    }
+    body.viewer-chrome-hidden .export-outline,
+    body.viewer-chrome-hidden .export-slide-nav,
+    body.viewer-chrome-hidden .export-fallback-nav,
+    body.viewer-chrome-hidden .export-warning {
+      display: none !important;
     }
     .mermaid-block .mermaid-render {
       min-height: 24px;
@@ -962,6 +1259,11 @@ export function buildStandaloneHtmlDocument({
         left: 8px;
         bottom: 8px;
       }
+      .export-style-menu {
+        top: 8px;
+        left: 8px;
+        width: min(224px, calc(100vw - 16px));
+      }
     }
     @media (max-width: 480px) {
       body {
@@ -985,13 +1287,14 @@ export function buildStandaloneHtmlDocument({
     }
   </style>
 </head>
-<body>
+<body${bodyClass}${bodyData}>
 ${renderedHtml}
+${styleMenuHtml}
 ${fallbackNav}
 ${outlineHtml}
 ${warningHtml}
 <script>
-${buildEnhancementScript({ mermaid: enableMermaid })}
+${buildEnhancementScript({ mermaid: enableMermaid, appearanceOptions: normalizedAppearance })}
 </script>
 </body>
 </html>`;

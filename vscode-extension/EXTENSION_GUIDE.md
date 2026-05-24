@@ -16,7 +16,7 @@ npm run package:vsix
 ### Install
 
 ```bash
-code --install-extension .\markdown-pattern-studio-preview-0.1.10.vsix --force
+code --install-extension .\markdown-pattern-studio-preview-0.1.19.vsix --force
 ```
 
 ### Basic Usage
@@ -26,8 +26,10 @@ code --install-extension .\markdown-pattern-studio-preview-0.1.10.vsix --force
 3. Save the file (`Ctrl+S`) to auto-refresh preview.
 4. Use `Markdown Studio: Refresh Preview` for manual force refresh.
 5. Use `MD Studio: Transform Markdown to Styled HTML` to export the currently open markdown file as styled HTML.
-6. Use `MD Studio: Open in Viewer` from the Markdown Files sidebar or Command Palette. From the palette it falls back to the active markdown document and shows a clear message if no markdown target is available.
+6. Use `MD Studio: Open in Viewer` from the MD Studio File Browser sidebar or Command Palette. From the palette it falls back to the active markdown document and shows a clear message if no markdown target is available.
 7. Use `MD Studio: Download Skill Folder` to export bundled or workspace skills as ready-to-share ZIP folders.
+8. Right-click a folder in the MD Studio File Browser sidebar and choose `FOCUS` to narrow only that browser until `MD Studio: Clear Folder Focus` is run.
+9. Use the preview `Style` menu to switch document appearance; the selected style is reused for preview refresh and HTML transform.
 
 ## 2) Cursor Sync on Save (Ctrl+S)
 
@@ -58,7 +60,8 @@ Notes:
   - Default: `"node"`
 - `mdStudioPreview.cliScriptPath`
   - CLI script path.
-  - Relative path: resolved from workspace root.
+  - Default value uses the extension-bundled CLI first.
+  - Custom relative path: resolved from workspace root.
   - Absolute path: used as-is.
   - Default: `"scripts/md-to-html.mjs"`
 - `mdStudioPreview.extraArgs`
@@ -70,6 +73,16 @@ Notes:
   - `slides`: always prefer slides.
   - `stack`: always prefer stack.
   - Default: `"stack"`
+- `mdStudioFileBrowser.extraExtensions`
+  - Additional file extensions shown in the MD Studio File Browser.
+  - Markdown extensions are always included.
+  - Default: `[]`
+
+Viewer appearance:
+
+- The preview `Style` menu stores appearance in workspace state, not user settings.
+- Stored values are passed to the bundled CLI as `--appearance`, `--appearance-background`, `--appearance-radius`, `--appearance-frame`, and `--viewer-chrome` only when they differ from defaults.
+- Markdown frontmatter may also set `appearance`, `appearanceBackground`, `appearanceRadius`, `appearanceFrame`, and `viewerChrome`.
 
 Outline state:
 
@@ -78,7 +91,7 @@ Outline state:
 
 ## 4) Skill Folder Download
 
-`MD Studio: Download Skill Folder` is available from the Command Palette and the Markdown Files sidebar title bar.
+`MD Studio: Download Skill Folder` is available from the Command Palette and the MD Studio File Browser sidebar title bar.
 
 1. Choose a source:
    - `Bundled Claude`
@@ -91,12 +104,36 @@ Outline state:
 
 Bundled skills are copied into the VSIX during `npm run build`, so installed users can export them without cloning the repository.
 
-## 5) Runtime Flow
+## 5) Folder Focus
+
+`FOCUS` is available from folder items in the MD Studio File Browser sidebar.
+
+1. Pick a folder and run `FOCUS`.
+2. The extension stores that folder as the MD Studio File Browser focus root.
+3. The MD Studio File Browser tree shows configured files under that folder and hides sibling branches inside the extension view only.
+4. VS Code Explorer and workspace `files.exclude` are not modified.
+5. `MD Studio: Clear Folder Focus` clears the browser focus and also removes legacy Explorer exclude rules if an older experimental build recorded them.
+
+For a nested folder such as `docs/guides`, the MD Studio File Browser sidebar keeps the path to that folder visible and omits sibling branches from the MD Studio tree.
+
+## 6) Viewer Appearance
+
+Appearance is a presentation layer above `theme` and `design`.
+
+- `Default` preserves current rendering.
+- `Clean` removes visual weight and shadows.
+- `Flat` removes rounded cards and emphasizes simple lines.
+- `Reader` reduces card framing for long-form review.
+- `Print` uses white, low-decoration output.
+
+Detail controls override the preset: background (`default | plain | transparent`), corners (`default | soft | none`), frame (`default | lines | none`), and viewer chrome (`full | minimal | hidden`).
+
+## 7) Runtime Flow
 
 1. Extension receives preview command or save event.
 2. Resolves CLI path in this order:
-   - `mdStudioPreview.cliScriptPath`
-   - bundled CLI (`<extension>/scripts/md-to-html.mjs`) only when the setting is default and missing
+   - bundled CLI (`<extension>/scripts/md-to-html.mjs`) when `mdStudioPreview.cliScriptPath` is the default value
+   - custom `mdStudioPreview.cliScriptPath` when a relative or absolute path is configured
    - manual picker (`Select Script`) as final fallback
 3. Resolves parser path for cursor sync:
    - workspace `public/core/engine.js`
@@ -105,7 +142,7 @@ Bundled skills are copied into the VSIX during `npm run build`, so installed use
 5. Rewrites `file://` asset URLs with `webview.asWebviewUri(...)`.
 6. Injects bridge script (cursor sync, preferred mode, outline state persistence).
 
-## 6) Troubleshooting
+## 8) Troubleshooting
 
 ### Preview does not open
 
@@ -113,7 +150,7 @@ Bundled skills are copied into the VSIX during `npm run build`, so installed use
 - If `MD Studio: Open in Viewer` is run from Command Palette, keep a markdown editor active or select a markdown file from the sidebar first.
 - Confirm `mdStudioPreview.cliScriptPath` points to an existing script path.
 - Confirm `mdStudioPreview.nodePath` points to a valid Node executable.
-- If script is missing and `cliScriptPath` is default, extension tries bundled CLI automatically.
+- If `cliScriptPath` is default, extension tries the bundled CLI first.
 - If `cliScriptPath` is customized, that path is used as-is (no bundled auto override).
 - If script is still missing, click `Select Script` in the popup and choose `md-to-html.mjs`.
 
@@ -127,12 +164,12 @@ Example (absolute path):
 
 ### Outline keeps reopening
 
-- Update to the latest extension (`0.1.10` or newer).
+- Update to the latest extension.
 - Hide once; subsequent refresh/save should preserve collapsed state for that document.
 
 ### `Open in Viewer` command shows an error
 
-- Update to `0.1.10` or newer.
+- Update to the latest extension.
 - The command now validates command arguments before opening a file.
 - If no file is passed by VS Code, it uses the active markdown document instead of failing on an undefined URI.
 
@@ -141,14 +178,14 @@ Example (absolute path):
 - Run `npm run build` before testing from source so bundled `ai_skills` are copied into `vscode-extension/ai_skills`.
 - Confirm `mdStudioPreview.skillsDir` points to a directory whose children contain `SKILL.md`.
 
-## 7) Development Notes
+## 9) Development Notes
 
 - Source: `vscode-extension/src/extension.ts`
 - Build: `npm run build`
 - Package: `npm run package:vsix`
-- Install test: `code --install-extension .\markdown-pattern-studio-preview-0.1.10.vsix --force`
+- Install test: `code --install-extension .\markdown-pattern-studio-preview-0.1.19.vsix --force`
 
-## 8) Uninstall / Cleanup Guide
+## 10) Uninstall / Cleanup Guide
 
 ### Uninstall extension
 
@@ -169,7 +206,7 @@ Find `local.markdown-pattern-studio-preview@...` in the list.
 If you no longer need the package file, delete:
 
 ```text
-vscode-extension/markdown-pattern-studio-preview-0.1.10.vsix
+vscode-extension/markdown-pattern-studio-preview-0.1.19.vsix
 ```
 
 ### Optional: remove local extension folder manually
@@ -177,5 +214,5 @@ vscode-extension/markdown-pattern-studio-preview-0.1.10.vsix
 If needed, remove this folder:
 
 ```text
-%USERPROFILE%\.vscode\extensions\local.markdown-pattern-studio-preview-0.1.10
+%USERPROFILE%\.vscode\extensions\local.markdown-pattern-studio-preview-0.1.19
 ```

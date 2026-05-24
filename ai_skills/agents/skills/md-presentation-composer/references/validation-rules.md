@@ -93,6 +93,7 @@ Run this checklist on every slide deck before declaring done. Assume there are p
 - [ ] No placeholder text remaining in the output
 - [ ] No slide is purely text — at minimum a `.stats` or `.icon-list` breaks it up
 - [ ] Brand-inspired decks do not invent facts, metrics, logos, screenshots, or proprietary assets not present in the source
+- [ ] No raw HTML authoring syntax remains; replace `<details>/<summary>` with `[!NOTE]`, `.message`, `.card`, table/code, or appendix pages
 
 ## DESIGN.md Library Checks
 
@@ -105,6 +106,7 @@ Run this checklist on every slide deck before declaring done. Assume there are p
 ## 기본 Markdown 호환 체크 (추가)
 
 - 체크리스트/중첩 리스트/아이템 후속 문단 렌더 확인
+- raw HTML(`<div>`, `<span>`, `<br>`, `<details>`, `<summary>`)이 없는지 확인
 - `_ / __ / 자동 URL / escape / hard break` 렌더 확인
 - 참조형 링크/이미지(`[text][id]`, `![alt][id]`) 해석 확인
 - `~~~` 코드 펜스와 ``` 코드 펜스 동등 처리 확인

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { isMarkdownFileUri } from '../utils/markdownFiles.js';
 
 export class MarkdownFileItem extends vscode.TreeItem {
   constructor(
@@ -15,9 +16,10 @@ export class MarkdownFileItem extends vscode.TreeItem {
     if (label) this.label = label;
     this.contextValue = isDirectory ? 'mdFolder' : 'mdFile';
     if (!isDirectory) {
+      const isMarkdown = isMarkdownFileUri(resourceUri);
       this.command = {
-        command: 'mdStudioPreview.openFileInViewer',
-        title: 'Open in Viewer',
+        command: isMarkdown ? 'mdStudioPreview.openFileInViewer' : 'mdStudioFileBrowser.openInEditor',
+        title: isMarkdown ? 'Open in Viewer' : 'Open in Editor',
         arguments: [resourceUri],
       };
     }

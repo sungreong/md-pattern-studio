@@ -10,7 +10,7 @@ import {
   type MarkdownFileBrowserController,
   registerMarkdownFileBrowser,
 } from './fileBrowser/registerMarkdownFileBrowser.js';
-import { getUriFromCommandArg, isMarkdownFile, isMarkdownFileUri } from './utils/markdownFiles.js';
+import { getUriFromCommandArg, isMarkdownFile, isMarkdownFileUri, isMarkdownPath } from './utils/markdownFiles.js';
 import { assertFileExists, delay, errorToMessage, fileExists } from './utils/runtime.js';
 import { injectPreviewEnhancements } from './webview/previewEnhancements.js';
 import { renderErrorHtml, setPanelStatus } from './webview/statusHtml.js';
@@ -25,6 +25,14 @@ interface ExtensionConfig {
   preferredViewMode: 'auto' | 'slides' | 'stack';
   extraArgs: string[];
   stripEmailDisclaimer: boolean;
+}
+
+interface AppearanceOptions {
+  appearance: 'default' | 'clean' | 'flat' | 'reader' | 'print';
+  appearanceBackground: 'default' | 'plain' | 'transparent';
+  appearanceRadius: 'default' | 'soft' | 'none';
+  appearanceFrame: 'default' | 'lines' | 'none';
+  viewerChrome: 'full' | 'minimal' | 'hidden';
 }
 
 interface PreviewSession {
@@ -57,6 +65,11 @@ interface ParsedSection {
 interface PreviewWebviewMessage {
   type?: unknown;
   collapsed?: unknown;
+  appearance?: unknown;
+  appearanceBackground?: unknown;
+  appearanceRadius?: unknown;
+  appearanceFrame?: unknown;
+  viewerChrome?: unknown;
   href?: unknown;
   rawHref?: unknown;
   text?: unknown;
@@ -77,6 +90,14 @@ let fileBrowserController: MarkdownFileBrowserController | null = null;
 let lastBrowserKey: string | null = null; // tracks the panel opened via file browser
 let outputChannel: vscode.OutputChannel | null = null;
 const outlineStateKeyPrefix = 'mdStudioPreview:outlineCollapsed:';
+const appearanceStateKey = 'mdStudioPreview:appearance';
+const defaultAppearanceOptions: AppearanceOptions = {
+  appearance: 'default',
+  appearanceBackground: 'default',
+  appearanceRadius: 'default',
+  appearanceFrame: 'default',
+  viewerChrome: 'full',
+};
 const dynamicImportModule = new Function('modulePath', 'return import(modulePath);') as (
   modulePath: string,
 ) => Promise<Record<string, unknown>>;
@@ -377,6 +398,7 @@ async function previewDocument(document: vscode.TextDocument, reason: PreviewRea
       {
         preferredViewMode: config.preferredViewMode,
         outlineCollapsed: session.outlineCollapsed,
+        appearance: loadAppearanceState(),
       },
     );
     // Reset per-render sync marker because replacing webview HTML resets scroll/state.
@@ -453,6 +475,10 @@ function ensureSession(document: vscode.TextDocument, reveal: boolean): PreviewS
       void handlePreviewLinkClick(session, payload);
       return;
     }
+    if (payload.type === 'mdStudioPreview.appearanceChanged') {
+      void persistAppearanceState(normalizeAppearanceMessage(payload));
+      return;
+    }
     if (payload.type !== 'mdStudioPreview.outlineStateChanged') return;
     if (typeof payload.collapsed !== 'boolean') return;
     session.outlineCollapsed = payload.collapsed;
@@ -525,6 +551,7 @@ async function runCliRendererForPath(inputPath: string, options: RunCliRendererO
   if (config.stripEmailDisclaimer && !extraArgs.includes('--strip-email-disclaimer')) {
     extraArgs.push('--strip-email-disclaimer');
   }
+  extraArgs.push(...buildAppearanceCliArgs(loadAppearanceState()));
   const args = [scriptPath, inputPath, '--out', outputPath, '--base-dir', inputDir, ...extraArgs];
   await spawnProcess(config.nodePath, args, cwd);
 
@@ -757,10 +784,6 @@ function decodeHrefPath(value: string): string {
   }
 }
 
-function isMarkdownPath(filePath: string): boolean {
-  return ['.md', '.markdown', '.mdown', '.mkdn'].includes(path.extname(filePath).toLowerCase());
-}
-
 function resolveSkillsDirPath(workspaceFolder: vscode.WorkspaceFolder | null): string {
   const raw = String(vscode.workspace.getConfiguration('mdStudioPreview').get<string>('skillsDir', 'claude_skills/skills') || '').trim();
   const value = raw || 'claude_skills/skills';
@@ -877,16 +900,16 @@ async function resolveAvailableCliScriptPath(
   workspaceFolder: vscode.WorkspaceFolder,
   rawValue: string,
 ): Promise<{ path: string; exists: boolean }> {
-  const primary = resolveCliScriptPath(workspaceFolder, rawValue);
-  if (await fileExists(primary)) {
-    return { path: primary, exists: true };
-  }
-
   if (isDefaultCliScriptPath(rawValue)) {
     const bundled = resolveBundledCliScriptPath();
     if (bundled && (await fileExists(bundled))) {
       return { path: bundled, exists: true };
     }
+  }
+
+  const primary = resolveCliScriptPath(workspaceFolder, rawValue);
+  if (await fileExists(primary)) {
+    return { path: primary, exists: true };
   }
 
   return { path: primary, exists: false };
@@ -1186,6 +1209,57 @@ function loadOutlineCollapsedState(documentKey: string): boolean {
 async function persistOutlineCollapsedState(documentKey: string, collapsed: boolean): Promise<void> {
   if (!extensionContextRef) return;
   await extensionContextRef.workspaceState.update(getOutlineStateKey(documentKey), collapsed);
+}
+
+function loadAppearanceState(): AppearanceOptions {
+  if (!extensionContextRef) return defaultAppearanceOptions;
+  return normalizeAppearanceState(extensionContextRef.workspaceState.get<unknown>(appearanceStateKey));
+}
+
+async function persistAppearanceState(appearance: AppearanceOptions): Promise<void> {
+  if (!extensionContextRef) return;
+  await extensionContextRef.workspaceState.update(appearanceStateKey, appearance);
+}
+
+function normalizeAppearanceMessage(payload: PreviewWebviewMessage): AppearanceOptions {
+  const nested = payload.appearance && typeof payload.appearance === 'object'
+    ? (payload.appearance as Record<string, unknown>)
+    : null;
+  return normalizeAppearanceState({
+    appearance: nested?.appearance ?? payload.appearance,
+    appearanceBackground: nested?.appearanceBackground ?? payload.appearanceBackground,
+    appearanceRadius: nested?.appearanceRadius ?? payload.appearanceRadius,
+    appearanceFrame: nested?.appearanceFrame ?? payload.appearanceFrame,
+    viewerChrome: nested?.viewerChrome ?? payload.viewerChrome,
+  });
+}
+
+function normalizeAppearanceState(value: unknown): AppearanceOptions {
+  const candidate = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return {
+    appearance: normalizeChoice(candidate.appearance, ['default', 'clean', 'flat', 'reader', 'print'], 'default'),
+    appearanceBackground: normalizeChoice(candidate.appearanceBackground, ['default', 'plain', 'transparent'], 'default'),
+    appearanceRadius: normalizeChoice(candidate.appearanceRadius, ['default', 'soft', 'none'], 'default'),
+    appearanceFrame: normalizeChoice(candidate.appearanceFrame, ['default', 'lines', 'none'], 'default'),
+    viewerChrome: normalizeChoice(candidate.viewerChrome, ['full', 'minimal', 'hidden'], 'full'),
+  };
+}
+
+function normalizeChoice<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return allowed.includes(normalized as T) ? (normalized as T) : fallback;
+}
+
+function buildAppearanceCliArgs(appearance: AppearanceOptions): string[] {
+  const args: string[] = [];
+  if (appearance.appearance !== 'default') args.push('--appearance', appearance.appearance);
+  if (appearance.appearanceBackground !== 'default') {
+    args.push('--appearance-background', appearance.appearanceBackground);
+  }
+  if (appearance.appearanceRadius !== 'default') args.push('--appearance-radius', appearance.appearanceRadius);
+  if (appearance.appearanceFrame !== 'default') args.push('--appearance-frame', appearance.appearanceFrame);
+  if (appearance.viewerChrome !== 'full') args.push('--viewer-chrome', appearance.viewerChrome);
+  return args;
 }
 
 async function cleanupTempFile(tempPath: string | null): Promise<void> {

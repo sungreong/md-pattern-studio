@@ -50,6 +50,24 @@ Do not pick a different visual idea for every section. A deck should feel like o
 
 Follow the table with one short interpretation paragraph or 2-4 bullets. Keep the exact evidence visible.
 
+## Replacing Collapsible Details
+
+Do not author `<details>` or `<summary>` blocks. Slides and saved HTML must be static and complete without hidden interaction.
+
+| Source intent | Use instead | Notes |
+| --- | --- | --- |
+| Presenter-only aside | `.message` body paragraph or appendix slide | Keep the main slide clean; move optional talk track after the main evidence |
+| Short example that should stay near the claim | `[!NOTE]` callout or `.card` | Make the example visible and concise |
+| Long explanation | Separate page with `---` + `{: .page-break}` | Hidden long text becomes unreadable in export/print |
+| Evidence sample, qrels, logs, or IDs | `.card` + `.table-fit` table or code block | Preserve exact values instead of hiding them |
+
+Preferred callout syntax:
+
+```markdown
+> [!NOTE] Example
+> Keep the detail visible, short, and tied to the slide's main claim.
+```
+
 ## Design Notes
 
 - Microsoft Copilot and Canva position AI presentation generation as draft + review workflows: generate structure quickly, then check slide order, tone, detail, brand, and layout.

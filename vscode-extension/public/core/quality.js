@@ -12,6 +12,7 @@ export function analyzeMarkdownQuality(source = '', model = null) {
   const headings = [];
   let inFence = false;
   let fenceLine = 0;
+  let rawDetailsOpenLine = 0;
   let paragraphStart = 0;
   let paragraph = [];
 
@@ -44,6 +45,27 @@ export function analyzeMarkdownQuality(source = '', model = null) {
     }
 
     if (inFence) continue;
+
+    if (/<details(?:\s[^>]*)?>/i.test(trimmed)) {
+      add('warn', 'HTML details 변환', '`<details>/<summary>`는 미리보기에서 정적 callout으로 변환됩니다. 새 문서에서는 `[!NOTE]`, `.message`, `.card`, 또는 별도 페이지를 사용하세요.', lineNumber);
+      if (!/<\/details\s*>/i.test(trimmed)) rawDetailsOpenLine = lineNumber;
+    }
+    if (rawDetailsOpenLine && /<\/details\s*>/i.test(trimmed)) {
+      rawDetailsOpenLine = 0;
+    }
+    if (/<summary(?:\s[^>]*)?>/i.test(trimmed) && !rawDetailsOpenLine && !/<details(?:\s[^>]*)?>/i.test(trimmed)) {
+      add('warn', 'HTML summary 단독 사용', '`<summary>`는 단독 Markdown 문법이 아닙니다. 제목 문장이나 callout 제목으로 바꾸세요.', lineNumber);
+    }
+    const unsupportedHtml = findUnsupportedHtml(trimmed);
+    for (const tag of unsupportedHtml) {
+      const severe = /^(iframe|script|style|video)$/i.test(tag);
+      add(
+        severe ? 'error' : 'warn',
+        '지원하지 않는 raw HTML',
+        `MPS Markdown은 <${tag}> HTML 태그를 렌더 문법으로 지원하지 않습니다. Markdown 문법이나 제공 템플릿으로 바꾸세요.`,
+        lineNumber,
+      );
+    }
 
     const heading = trimmed.match(/^(#{1,6})\s*(.*)$/);
     if (heading) {
@@ -91,6 +113,7 @@ export function analyzeMarkdownQuality(source = '', model = null) {
   flushParagraph(lines.length);
 
   if (inFence) add('error', '닫히지 않은 코드블록', `L${fenceLine}에서 시작한 코드블록이 닫히지 않았습니다.`, fenceLine);
+  if (rawDetailsOpenLine) add('error', '닫히지 않은 details 블록', `L${rawDetailsOpenLine}에서 시작한 <details> 블록이 </details>로 닫히지 않았습니다.`, rawDetailsOpenLine);
   if (!headings.length && text.trim()) add('warn', '제목 없음', '문서에 heading이 없어 outline과 페이지 구조를 만들기 어렵습니다.', 1);
 
   const tables = (model?.blocks || []).filter((block) => block.type === 'table');
@@ -141,4 +164,15 @@ function splitTableRow(line = '') {
     .replace(/\|$/, '')
     .split('|')
     .map((cell) => cell.trim());
+}
+
+function findUnsupportedHtml(line = '') {
+  const tags = [];
+  const re = /<\/?(div|span|br|video|iframe|script|style)\b[^>]*>/gi;
+  let match;
+  while ((match = re.exec(String(line || '')))) {
+    const tag = String(match[1] || '').toLowerCase();
+    if (!tags.includes(tag)) tags.push(tag);
+  }
+  return tags;
 }

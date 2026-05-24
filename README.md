@@ -30,8 +30,11 @@ http://localhost:3188
 - **`intent:` 프론트매터** — `pitch / report / reference / narrative` 문서 목적 선언
 - Mermaid 렌더링 지원
 - standalone HTML의 로컬 이미지 자동 Base64 내장 및 누락 이미지 fallback
-- standalone HTML 아웃라인/코드 복사 버튼 지원
+- standalone HTML 아웃라인/코드 복사 버튼/Style 메뉴/Fill 줌 지원
 - **Template Builder**: 웹 UI에서 섹션 템플릿을 시각적으로 선택·삽입하는 보조 패널
+- **문서 외형 프리셋**: `Default`, `Clean`, `Flat`, `Reader`, `Print`와 배경/모서리/프레임/뷰어 크롬 옵션 지원
+- `<details>/<summary>` 호환 변환: 기존 raw HTML details는 정적 note callout으로 보존하고, 새 문서에는 Markdown/callout/template 사용을 안내
+- **VS Code File Browser**: 폴더 FOCUS, 추가 확장자 표시, Pinned/Recent/Hidden, 파일 검색·정렬·필터 지원
 
 ## 화면 구성과 사용 방법
 
@@ -43,6 +46,7 @@ http://localhost:3188
 2. 가운데 `Markdown Editor`에서 문서를 작성합니다.
 3. 오른쪽 `Live Preview`에서 즉시 결과를 확인합니다.
 4. 상단 버튼으로 필요 작업을 실행합니다.
+   - `Style`: 문서 외형 프리셋, 배경, 모서리, 프레임, 뷰어 크롬 조정
    - `샘플`: 예제 문서 로드
    - `MD 열기`: 로컬 Markdown 불러오기
    - `MD 저장`: 현재 Markdown 저장
@@ -64,6 +68,11 @@ title: 2026년 3월 운영 보고서
 theme: midnight        # 16종 팔레트 중 선택
 design: stripe         # 선택: 수집된 DESIGN.md 브랜드 slug
 intent: pitch          # report | pitch | reference | narrative
+appearance: clean      # default | clean | flat | reader | print
+appearanceBackground: plain      # default | plain | transparent
+appearanceRadius: none           # default | soft | none
+appearanceFrame: lines           # default | lines | none
+viewerChrome: minimal            # full | minimal | hidden
 mode: web
 toc: true
 tocDepth: 3
@@ -80,6 +89,16 @@ pageHeight: 720px
 | `pitch` | 제안서/발표 — 큰 제목, 굵은 callout, 비주얼 템플릿 |
 | `reference` | 문서/위키 — 탐색 우선, 정보 밀도 최적화 |
 | `narrative` | 튜토리얼/에세이 — 여백 확보, 읽기 흐름 중심 |
+
+외형 옵션은 `theme`/`design` 위에 얹는 표시 계층입니다. Markdown 내용은 그대로 두고, 리뷰·공유·인쇄 목적에 맞게 프레임 밀도와 뷰어 UI만 바꿀 수 있습니다.
+
+| 키 | 값 |
+|----|----|
+| `appearance` | `default`, `clean`, `flat`, `reader`, `print` |
+| `appearanceBackground` | `default`, `plain`, `transparent` |
+| `appearanceRadius` | `default`, `soft`, `none` |
+| `appearanceFrame` | `default`, `lines`, `none` |
+| `viewerChrome` | `full`, `minimal`, `hidden` |
 
 ### 2) 섹션 속성 (heading 뒤 `{...}`)
 
@@ -189,6 +208,9 @@ npm run md2html -- test/notes.md --out test/notes.cli.html --theme report --stan
 
 # DESIGN.md 브랜드 방향 적용
 npm run md2html -- test/notes.md --out test/notes.vercel.html --design vercel --intent pitch --standalone
+
+# 외형 프리셋/뷰어 크롬 지정
+npm run md2html -- test/notes.md --appearance flat --appearance-radius none --viewer-chrome hidden --standalone
 ```
 
 옵션:
@@ -197,6 +219,11 @@ npm run md2html -- test/notes.md --out test/notes.vercel.html --design vercel --
 - `--theme`: 팔레트 지정 (아래 16종 참고)
 - `--design`: DESIGN.md 브랜드 preset 지정 (`vercel`, `stripe`, `airbnb` 등)
 - `--intent`: `report | pitch | reference | narrative`
+- `--appearance`: 외형 프리셋 (`default | clean | flat | reader | print`)
+- `--appearance-background`: 배경 처리 (`default | plain | transparent`)
+- `--appearance-radius`: 모서리 처리 (`default | soft | none`)
+- `--appearance-frame`: 프레임 처리 (`default | lines | none`)
+- `--viewer-chrome`: standalone 뷰어 UI 노출 수준 (`full | minimal | hidden`)
 - `--mode`: 렌더 모드 (`web` 등)
 - `--standalone` / `--no-standalone`: standalone HTML 셸 포함 여부
 - `--base-dir <path>`: 상대 경로 자산 해석 기준 디렉터리
@@ -244,18 +271,14 @@ npm run test:embed-images
 
 이 화면은 VS Code에서 Markdown을 저장했을 때, 확장이 CLI 렌더링 결과를 Webview로 보여주고 Outline/페이지 네비게이션을 제공하는 상태입니다.
 
-### 최근 VS Code Extension 업데이트 (2026-05-16)
+### 최근 VS Code Extension 업데이트 (0.1.19 — 2026-05-24)
 
-`db030df` 이후 확장 쪽 변경을 기준으로 정리했습니다.
-
-- **Markdown File Browser 고도화**: 정렬, 필터, Pinned, Recent, 숨김 항목 관리, 경로/이름 복사 메뉴 추가
-- **짧은 메타데이터 표시**: `방금`, `12분전`, `8KB`, `240줄`처럼 트리 폭을 덜 차지하는 표시로 변경
-- **문서 탐색 보조 정보**: H1 제목 tooltip, 폴더 문서 수/최근/오래됨 요약, 가능한 경우 Git 상태 배지 표시
-- **Viewer 반응형 개선**: 좁은 패널에서 Outline과 문서 폭이 겹치지 않도록 Slide/Stack 레이아웃 재계산
-- **Zoom/Fit 개선**: Slide/Stack 모두 `+/-`는 5% 단위, `Fit`은 남는 공간이 있으면 100%를 넘어 확대 가능
-- **구조화 리팩터링**: 파일 브라우저 등록, TreeItem, Git 상태, Webview 보강 로직을 별도 모듈로 분리해 주요 소스 파일을 1000줄 미만으로 유지
-- **Stats 렌더 안정화**: `.stats` 섹션의 기술 근거 표(Method/Hit/Rank, long ID, boolean/rank 혼합)는 KPI 카드가 아니라 표로 유지
-- **AI 스킬 작성 프로토콜 강화**: `md-presentation-composer`가 전체 문서를 먼저 읽고 document map/component system을 정한 뒤 통일감 있게 변환하도록 보강
+- **Style 메뉴 연동**: VS Code Preview와 `MD Studio: Transform Markdown to Styled HTML`이 같은 외형 옵션을 사용합니다.
+- **Fill 줌 추가**: Slides 모드에서 `Fill` 또는 `Ctrl+9`로 페이지를 가로폭에 맞춰 크게 볼 수 있고, Stack 전환 시 줌 상태가 자동 정리됩니다.
+- **MD Studio File Browser 확장**: Markdown 외에 `.txt`, `.html`, `.json` 같은 추가 확장자를 표시할 수 있으며 비-Markdown 파일은 `Open in Editor`로 엽니다.
+- **폴더 FOCUS 정리**: 우클릭 `FOCUS`는 MD Studio File Browser 안에서만 범위를 좁히며 VS Code Explorer의 `files.exclude`를 건드리지 않습니다. 이전 실험 빌드가 남긴 Explorer 제외 규칙은 `FOCUS 해제` 시 정리합니다.
+- **Raw HTML 가드**: `<details>/<summary>`는 정적 note callout으로 변환하고, `<div>`, `<iframe>` 같은 지원하지 않는 raw HTML은 품질 경고로 노출합니다.
+- **번들 렌더러 우선 사용**: 기본 CLI 설정에서는 확장에 포함된 최신 렌더러를 먼저 사용해 Style/Fill 컨트롤이 누락되지 않게 했습니다.
 
 사용 흐름:
 
@@ -275,17 +298,20 @@ npm run test:embed-images
 - **반응형 레이아웃**: Webview 패널이 좁아도 슬라이드·Outline이 실제 너비에 맞게 자동 조정
 - **Slide/Stack Zoom**: 5% 단위 확대/축소, Fit은 화면 여유 공간을 사용해 100% 이상 확대 가능
 
-### Markdown File Browser (Activity Bar)
+### MD Studio File Browser (Activity Bar)
 
-- Activity Bar의 **책 아이콘**을 클릭하면 워크스페이스의 모든 `.md` 파일이 폴더 트리로 표시됨
+- Activity Bar의 **책 아이콘**을 클릭하면 워크스페이스의 Markdown 파일이 폴더 트리로 표시됨
 - **파일 클릭** → 단일 Reader 패널에서 즉시 미리보기 (이전 패널 자동 교체)
 - **우클릭 → Open in New Panel** → 기존 패널 유지하며 새 패널로 열기 (여러 파일 동시 비교)
+- **우클릭 → Open in Editor** → 파일을 일반 VS Code 에디터에서 열기
 - **우클릭 → Hide from Browser** → 관심 없는 파일/폴더를 워크스페이스별로 숨김
+- **우클릭 폴더 → FOCUS** → 해당 폴더 아래 파일만 MD Studio File Browser에서 보기
 - **우클릭 → Copy Path / Copy Relative Path / Copy Name** → 파일과 폴더 경로/이름 복사
 - Command Palette의 **MD Studio: Open in Viewer**는 현재 열린 Markdown 파일을 대상으로 실행되며, 대상이 없으면 안내 메시지로 종료
 - **검색 아이콘(🔍)** → 파일명·경로 기준 QuickPick 검색
 - **필터 아이콘** → 전체, Pinned, Recent, 오래 안 고침, 긴 문서, 큰 파일 보기
 - **정렬 아이콘** → 이름, 수정일, 생성일, 파일 크기, 문서 길이 기준 정렬
+- **확장자 아이콘** → Markdown 외에 표시할 추가 확장자 선택 (`txt`, `html`, `json` 등)
 - **눈 아이콘** → 숨김 항목 관리 및 숨김 전체 해제
 - **Pinned / Recent 가상 섹션**으로 자주 보는 문서와 최근 문서를 빠르게 접근
 - 파일 추가/삭제/수정 시 트리 자동 갱신 (300ms 디바운스)
@@ -305,8 +331,12 @@ npm run test:embed-images
 - `mdStudioPreview.cliScriptPath` (기본값 `scripts/md-to-html.mjs`)
 - `mdStudioPreview.preferredViewMode` (기본값 `stack`, 값: `auto | slides | stack`)
 - `mdStudioPreview.extraArgs` (기본값 `["--standalone"]`)
+- `mdStudioPreview.stripEmailDisclaimer` (기본값 `false`)
+- `mdStudioPreview.skillsDir` (기본값 `claude_skills/skills`)
+- `mdStudioPreview.defaultSkill` (기본값 `md-presentation-composer`)
+- `mdStudioFileBrowser.extraExtensions` (기본값 `[]`)
 
-기본 경로가 현재 워크스페이스에 없으면, 확장 내부에 번들된 CLI로 자동 fallback 후 렌더링합니다.
+기본 `mdStudioPreview.cliScriptPath` 값을 사용할 때는 확장 내부에 번들된 CLI를 먼저 사용합니다.
 워크스페이스 외부 파일도 동일하게 번들 CLI를 사용하며, `mdStudioPreview.cliScriptPath`에 절대 경로를 지정해 오버라이드할 수 있습니다.
 
 패키징:
@@ -321,7 +351,7 @@ npm run package:vsix
 설치:
 
 ```bash
-code --install-extension .\markdown-pattern-studio-preview-0.1.13.vsix
+code --install-extension .\markdown-pattern-studio-preview-0.1.19.vsix
 ```
 
 ### 커서 동기화 동작 (Ctrl+S)
@@ -457,6 +487,7 @@ npm run md2html -- public/examples/design-showcase.md --theme midnight --intent 
 - 서버: `server.js`
 - CLI: `scripts/md-to-html.mjs`
 - 코어 엔진: `public/core/engine.js`
+- 외형 옵션: `public/core/appearance.js`
 - 테마/스타일: `public/document.css`
 - 샘플 문서: `public/examples/sample.md`
 - 디자인 쇼케이스: `public/examples/design-showcase.md`
@@ -465,26 +496,15 @@ npm run md2html -- public/examples/design-showcase.md --theme midnight --intent 
 
 ## 변경 이력
 
-### VS Code Extension 0.1.13 — 2026-05-16
+### VS Code Extension 0.1.19 — 2026-05-24
 
-- `.stats` 템플릿에 preflight를 추가해 KPI 표/list만 카드화하고, 검색 평가·기술 근거·Method/Hit/Rank 표는 일반 표로 보존
-- `statsMode="cards"` / `statsMode="table"` override를 지원해 작성자가 카드화 여부를 명시 가능
-- 긴 코드형 값이 카드 내부에서 깨지지 않도록 `overflow-wrap`과 code-like stat 스타일 보강
-- `md-presentation-composer` 스킬을 “전체 문서 먼저 읽기 → document map → component system → 섹션 작성” 흐름으로 강화
-- `component-selection-rules.md`를 추가해 KPI 카드, evidence table, compare, callout, technical proof 선택 기준 정리
-- 최신 VSIX: `vscode-extension/markdown-pattern-studio-preview-0.1.13.vsix`
-
-### VS Code Extension 0.1.10 — 2026-05-16
-
-**비교 기준:** `db030df` 이후 확장 업데이트
-
-- Markdown File Browser에 정렬, 필터, Pinned, Recent, 숨김 항목 관리, 경로/이름 복사 메뉴 추가
-- 파일 설명을 짧은 한국어/기호 중심 메타데이터로 정리하고, 자세한 정보는 tooltip로 이동
-- 폴더 요약, H1 제목 tooltip, 가능한 경우 Git 상태 배지 표시
-- Slide/Stack Viewer의 반응형 레이아웃과 Outline 동작 개선
-- Slide/Stack 모두 5% 단위 zoom과 100% 이상 Fit 확대 지원
-- 파일 브라우저와 Webview 보강 로직을 모듈로 분리해 주요 소스 파일을 1000줄 미만으로 유지
-- 최신 VSIX: `vscode-extension/markdown-pattern-studio-preview-0.1.10.vsix`
+- 웹/CLI/VS Code Preview에 공통 `appearance` 옵션을 추가하고, standalone HTML에도 Style 메뉴를 포함
+- Slides 뷰어에 `Fill` 줌을 추가하고 Stack/Slides 전환 시 줌 overflow 상태를 초기화
+- MD Studio File Browser에서 추가 확장자 표시, 비-Markdown `Open in Editor`, 폴더 FOCUS, FOCUS 해제를 지원
+- 기본 CLI 설정에서 확장 번들 렌더러를 우선 사용해 최신 뷰어 컨트롤을 안정적으로 제공
+- `<details>/<summary>`를 정적 note callout으로 변환하고 지원하지 않는 raw HTML 품질 경고를 추가
+- `md-presentation-composer` 스킬에 raw HTML 금지와 details 대체 작성 규칙을 보강
+- 최신 VSIX: `vscode-extension/markdown-pattern-studio-preview-0.1.19.vsix`
 
 ### v0.3.1 — 2026-05-01 (PPTX-skill Design System)
 

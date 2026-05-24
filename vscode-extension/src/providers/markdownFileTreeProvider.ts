@@ -2,6 +2,14 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { readGitStatusByPath } from './gitStatus.js';
 import { MarkdownFileItem } from './markdownFileItem.js';
+import {
+  DEFAULT_FILE_BROWSER_EXCLUDE_GLOB,
+  buildExtensionGlob,
+  getBrowserFileExtensions,
+  isMarkdownFileUri,
+  normalizeExtraFileExtensions,
+  readExtraFileExtensions,
+} from '../utils/markdownFiles.js';
 
 export type FileBrowserSortOrder = 'nameAsc' | 'nameDesc' | 'modifiedDesc' | 'modifiedAsc' | 'createdDesc' | 'createdAsc' | 'sizeDesc' | 'sizeAsc' | 'lengthDesc' | 'lengthAsc';
 
@@ -21,6 +29,7 @@ const PINNED_STATE_KEY = 'mdStudioFileBrowser:pinnedFiles';
 const RECENT_STATE_KEY = 'mdStudioFileBrowser:recentFiles';
 const FILTER_STATE_KEY = 'mdStudioFileBrowser:filterMode';
 const HIDDEN_STATE_KEY = 'mdStudioFileBrowser:hiddenItems';
+const FOCUS_STATE_KEY = 'mdStudioFileBrowser:focusRoot';
 const PINNED_ROOT_KEY = 'mdStudioFileBrowser:pinnedRoot';
 const RECENT_ROOT_KEY = 'mdStudioFileBrowser:recentRoot';
 const FILTER_ROOT_KEY = 'mdStudioFileBrowser:filterRoot';
@@ -77,12 +86,15 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
   private itemByPath = new Map<string, MarkdownFileItem>(); // fsPath -> item (needed for getParent)
   private roots: MarkdownFileItem[] = [];
   private watcher: vscode.FileSystemWatcher | undefined;
+  private watcherDisposables: vscode.Disposable[] = [];
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   private sortOrder: FileBrowserSortOrder;
   private filterMode: FileBrowserFilterMode;
+  private extraExtensions: string[];
   private pinnedPaths: string[];
   private recentPaths: string[];
   private hiddenPaths: string[];
+  private focusRootPath: string | null;
   private pinnedRoot: MarkdownFileItem | null = null;
   private recentRoot: MarkdownFileItem | null = null;
   private filterRoot: MarkdownFileItem | null = null;
@@ -93,15 +105,45 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
   constructor(private readonly context: vscode.ExtensionContext) {
     this.sortOrder = readSortOrder(context);
     this.filterMode = readFilterMode(context);
+    this.extraExtensions = readExtraFileExtensions();
     this.pinnedPaths = readPinnedPaths(context);
     this.recentPaths = readRecentPaths(context);
     this.hiddenPaths = readHiddenPaths(context);
-    this.watcher = vscode.workspace.createFileSystemWatcher('**/*.{md,mdx,markdown,mdown,mkd,mkdn}');
-    this.watcher.onDidCreate(() => this.scheduleRefresh());
-    this.watcher.onDidChange(() => this.scheduleRefresh());
-    this.watcher.onDidDelete(() => this.scheduleRefresh());
-    context.subscriptions.push(this.watcher);
+    this.focusRootPath = readFocusRootPath(context);
+    this.resetFileWatcher();
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (!event.affectsConfiguration('mdStudioFileBrowser.extraExtensions')) return;
+        const nextExtraExtensions = readExtraFileExtensions();
+        if (sameExtensionArray(this.extraExtensions, nextExtraExtensions)) return;
+        this.extraExtensions = nextExtraExtensions;
+        this.resetFileWatcher();
+        this.scheduleRefresh();
+      }),
+      {
+        dispose: () => this.disposeWatcher(),
+      },
+    );
     void this.refresh();
+  }
+
+  private resetFileWatcher(): void {
+    this.disposeWatcher();
+    this.watcher = vscode.workspace.createFileSystemWatcher(this.getFindFilesPattern());
+    this.watcherDisposables = [
+      this.watcher,
+      this.watcher.onDidCreate(() => this.scheduleRefresh()),
+      this.watcher.onDidChange(() => this.scheduleRefresh()),
+      this.watcher.onDidDelete(() => this.scheduleRefresh()),
+    ];
+  }
+
+  private disposeWatcher(): void {
+    for (const disposable of this.watcherDisposables) {
+      disposable.dispose();
+    }
+    this.watcherDisposables = [];
+    this.watcher = undefined;
   }
 
   private scheduleRefresh(): void {
@@ -124,9 +166,14 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
 
   // Required for treeView.reveal() to work
   getParent(element: MarkdownFileItem): MarkdownFileItem | null {
-    if (element.contextValue === 'mdPinnedFile') return this.pinnedRoot;
-    if (element.contextValue === 'mdRecentFile') return this.recentRoot;
-    if (element.contextValue === 'mdFilterFile' || element.contextValue === 'mdFilterFilePinned') return this.filterRoot;
+    if (element.contextValue === 'mdPinnedFile' || element.contextValue === 'mdExtraPinnedFile') return this.pinnedRoot;
+    if (element.contextValue === 'mdRecentFile' || element.contextValue === 'mdExtraRecentFile') return this.recentRoot;
+    if (
+      element.contextValue === 'mdFilterFile' ||
+      element.contextValue === 'mdFilterFilePinned' ||
+      element.contextValue === 'mdExtraFilterFile' ||
+      element.contextValue === 'mdExtraFilterFilePinned'
+    ) return this.filterRoot;
     if (this.filterMode !== 'all' && !element.isDirectory) {
       if (this.containsResource(FILTER_ROOT_KEY, element.resourceUri.fsPath)) return this.filterRoot;
       if (this.containsResource(RECENT_ROOT_KEY, element.resourceUri.fsPath)) return this.recentRoot;
@@ -142,7 +189,10 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
   }
 
   getSortDescription(): string {
-    return `${SORT_DESCRIPTIONS[this.sortOrder]} · ${FILTER_DESCRIPTIONS[this.filterMode]}`;
+    const parts = [SORT_DESCRIPTIONS[this.sortOrder], FILTER_DESCRIPTIONS[this.filterMode]];
+    if (this.extraExtensions.length) parts.push(this.extraExtensions.join(', '));
+    if (this.focusRootPath) parts.push('FOCUS');
+    return parts.join(' · ');
   }
 
   async setSortOrder(sortOrder: FileBrowserSortOrder): Promise<void> {
@@ -154,6 +204,30 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
 
   getFilterMode(): FileBrowserFilterMode {
     return this.filterMode;
+  }
+
+  getExtraExtensions(): string[] {
+    return [...this.extraExtensions];
+  }
+
+  getIncludedExtensions(): string[] {
+    return getBrowserFileExtensions(this.extraExtensions);
+  }
+
+  getExtensionDescription(): string {
+    const extra = this.extraExtensions.length ? this.extraExtensions.join(', ') : '추가 없음';
+    return `Markdown + ${extra}`;
+  }
+
+  async setExtraExtensions(extraExtensions: readonly string[]): Promise<void> {
+    const normalized = normalizeExtraFileExtensions([...extraExtensions]);
+    if (sameExtensionArray(this.extraExtensions, normalized)) return;
+    this.extraExtensions = normalized;
+    await vscode.workspace
+      .getConfiguration('mdStudioFileBrowser')
+      .update('extraExtensions', normalized, vscode.ConfigurationTarget.Workspace);
+    this.resetFileWatcher();
+    await this.refresh();
   }
 
   async setFilterMode(filterMode: FileBrowserFilterMode): Promise<void> {
@@ -171,6 +245,29 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
     return this.hiddenPaths.some((hiddenPath) => isSameOrDescendant(resourceUri.fsPath, hiddenPath));
   }
 
+  isVisibleByRule(resourceUri: vscode.Uri): boolean {
+    return !this.isHiddenByRule(resourceUri) && this.isInFocus(resourceUri);
+  }
+
+  isFocusActive(): boolean {
+    return Boolean(this.focusRootPath);
+  }
+
+  async findVisibleFiles(): Promise<vscode.Uri[]> {
+    const uris = await this.findAllFiles();
+    return uris.filter((uri) => this.isVisibleByRule(uri));
+  }
+
+  getFocusItem(): FileBrowserHiddenItem | null {
+    if (!this.focusRootPath) return null;
+    const relative = formatRelativeParentPath(this.focusRootPath);
+    return {
+      fsPath: this.focusRootPath,
+      label: path.basename(this.focusRootPath),
+      description: relative === 'workspace root' ? '' : relative,
+    };
+  }
+
   getHiddenItems(): FileBrowserHiddenItem[] {
     const includeWorkspaceName = (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
     return this.hiddenPaths
@@ -184,6 +281,20 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
         };
       })
       .sort((a, b) => a.description.localeCompare(b.description) || a.label.localeCompare(b.label));
+  }
+
+  async focusFolder(resourceUri: vscode.Uri): Promise<void> {
+    if (this.focusRootPath && sameFsPath(this.focusRootPath, resourceUri.fsPath)) return;
+    this.focusRootPath = resourceUri.fsPath;
+    await this.persistFocusRootPath();
+    await this.refresh();
+  }
+
+  async clearFocus(): Promise<void> {
+    if (!this.focusRootPath) return;
+    this.focusRootPath = null;
+    await this.persistFocusRootPath();
+    await this.refresh();
   }
 
   async hideItem(resourceUri: vscode.Uri): Promise<void> {
@@ -251,6 +362,14 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
     await this.refresh();
   }
 
+  private getFindFilesPattern(): string {
+    return buildExtensionGlob(this.getIncludedExtensions());
+  }
+
+  private async findAllFiles(): Promise<vscode.Uri[]> {
+    return vscode.workspace.findFiles(this.getFindFilesPattern(), DEFAULT_FILE_BROWSER_EXCLUDE_GLOB);
+  }
+
   async refresh(): Promise<void> {
     const refreshRun = ++this.refreshRun;
     this.tree.clear();
@@ -267,8 +386,7 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
       return;
     }
 
-    const exclude = '{**/node_modules/**,**/.git/**,**/dist/**,**/.next/**}';
-    const uris = await vscode.workspace.findFiles('**/*.{md,mdx,markdown,mdown,mkd,mkdn}', exclude);
+    const uris = await this.findAllFiles();
     if (refreshRun !== this.refreshRun) return;
 
     this.pruneLineCountCache(uris);
@@ -277,7 +395,7 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
     const metadataByPath = await this.loadMetadata(uris);
     if (refreshRun !== this.refreshRun) return;
     this.metadataByPath = metadataByPath;
-    const visibleUris = uris.filter((uri) => !this.isHiddenByRule(uri));
+    const visibleUris = uris.filter((uri) => this.isVisibleByRule(uri));
 
     // Build file items keyed by their parent folder
     const folderFileMap = new Map<string, MarkdownFileItem[]>();
@@ -414,14 +532,21 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
 
   private decorateFileItem(item: MarkdownFileItem): void {
     const metadata = this.metadataByPath.get(item.resourceUri.fsPath);
-    item.contextValue = this.isPinned(item.resourceUri) ? 'mdFilePinned' : 'mdFile';
+    const isMarkdown = isMarkdownFileUri(item.resourceUri);
+    item.contextValue = this.isPinned(item.resourceUri)
+      ? isMarkdown
+        ? 'mdFilePinned'
+        : 'mdExtraFilePinned'
+      : isMarkdown
+        ? 'mdFile'
+        : 'mdExtraFile';
     item.description = formatMetadataDescription(metadata, this.sortOrder);
     item.tooltip = buildMetadataTooltip(item.resourceUri.fsPath, metadata);
   }
 
   private decoratePinnedFileItem(item: MarkdownFileItem): void {
     const metadata = this.metadataByPath.get(item.resourceUri.fsPath);
-    item.contextValue = 'mdPinnedFile';
+    item.contextValue = isMarkdownFileUri(item.resourceUri) ? 'mdPinnedFile' : 'mdExtraPinnedFile';
     item.description = formatMetadataDescription(metadata, this.sortOrder);
     item.tooltip = buildMetadataTooltip(item.resourceUri.fsPath, metadata, true);
   }
@@ -437,13 +562,13 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
     const summary = summarizeFolder(dir, uris, this.metadataByPath);
     if (!summary.total) return;
 
-    const parts = [`${summary.total.toLocaleString()}문서`];
+    const parts = [`${summary.total.toLocaleString()}파일`];
     if (summary.recent > 0) parts.push(`${summary.recent.toLocaleString()}개 최근`);
     if (summary.stale > 0) parts.push(`${summary.stale.toLocaleString()}개 오래됨`);
     item.description = parts.join(' · ');
     item.tooltip = [
       dir,
-      `문서: ${summary.total.toLocaleString()}개`,
+      `파일: ${summary.total.toLocaleString()}개`,
       `최근 24시간: ${summary.recent.toLocaleString()}개`,
       `30일+ 미수정: ${summary.stale.toLocaleString()}개`,
     ].join('\n');
@@ -452,7 +577,9 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
   private prependPinnedRoot(uris: vscode.Uri[]): void {
     const uriByPath = new Map<string, vscode.Uri>();
     for (const uri of uris) {
-      uriByPath.set(normalizeFsPath(uri.fsPath), uri);
+      if (this.isVisibleByRule(uri)) {
+        uriByPath.set(normalizeFsPath(uri.fsPath), uri);
+      }
     }
 
     const pinnedUris = this.pinnedPaths
@@ -465,7 +592,7 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
     pinnedRoot.contextValue = 'mdPinnedRoot';
     pinnedRoot.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
     pinnedRoot.iconPath = new vscode.ThemeIcon('pinned');
-    pinnedRoot.tooltip = 'Pinned markdown files';
+    pinnedRoot.tooltip = 'Pinned MD Studio files';
 
     const pinnedItems = pinnedUris.map((uri) => {
       const item = new MarkdownFileItem(uri, false);
@@ -496,12 +623,12 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
     recentRoot.contextValue = 'mdRecentRoot';
     recentRoot.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
     recentRoot.iconPath = new vscode.ThemeIcon('history');
-    recentRoot.tooltip = 'Recently opened markdown files';
+    recentRoot.tooltip = 'Recently opened MD Studio files';
 
     const recentItems = recentUris.map((uri) => {
       const item = new MarkdownFileItem(uri, false);
       item.iconPath = new vscode.ThemeIcon('history');
-      this.decorateVirtualFileItem(item, 'mdRecentFile');
+      this.decorateVirtualFileItem(item, isMarkdownFileUri(uri) ? 'mdRecentFile' : 'mdExtraRecentFile');
       return item;
     });
 
@@ -522,13 +649,22 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
     filterRoot.contextValue = 'mdFilterRoot';
     filterRoot.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
     filterRoot.iconPath = new vscode.ThemeIcon('filter');
-    filterRoot.tooltip = `${FILTER_DESCRIPTIONS[this.filterMode]} markdown files`;
+    filterRoot.tooltip = `${FILTER_DESCRIPTIONS[this.filterMode]} MD Studio files`;
 
     const filterItems = candidates.map((uri) => {
       const item = new MarkdownFileItem(uri, false);
       const pinned = this.isPinned(uri);
-      item.iconPath = pinned ? new vscode.ThemeIcon('pinned') : new vscode.ThemeIcon('markdown');
-      this.decorateVirtualFileItem(item, pinned ? 'mdFilterFilePinned' : 'mdFilterFile');
+      item.iconPath = pinned
+        ? new vscode.ThemeIcon('pinned')
+        : new vscode.ThemeIcon(isMarkdownFileUri(uri) ? 'markdown' : 'file');
+      const contextValue = pinned
+        ? isMarkdownFileUri(uri)
+          ? 'mdFilterFilePinned'
+          : 'mdExtraFilterFilePinned'
+        : isMarkdownFileUri(uri)
+          ? 'mdFilterFile'
+          : 'mdExtraFilterFile';
+      this.decorateVirtualFileItem(item, contextValue);
       return item;
     });
 
@@ -616,6 +752,15 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
 
   private async persistHiddenPaths(): Promise<void> {
     await this.context.workspaceState.update(HIDDEN_STATE_KEY, this.hiddenPaths);
+  }
+
+  private isInFocus(resourceUri: vscode.Uri): boolean {
+    if (!this.focusRootPath) return true;
+    return isSameOrDescendant(resourceUri.fsPath, this.focusRootPath);
+  }
+
+  private async persistFocusRootPath(): Promise<void> {
+    await this.context.workspaceState.update(FOCUS_STATE_KEY, this.focusRootPath ?? undefined);
   }
 }
 
@@ -888,6 +1033,12 @@ function readHiddenPaths(context: vscode.ExtensionContext): string[] {
   return readStoredFsPaths(stored);
 }
 
+function readFocusRootPath(context: vscode.ExtensionContext): string | null {
+  const stored = context.workspaceState.get<unknown>(FOCUS_STATE_KEY);
+  if (typeof stored !== 'string' || !stored.trim()) return null;
+  return stored;
+}
+
 function readStoredFsPaths(stored: unknown): string[] {
   if (!Array.isArray(stored)) return [];
   const fsPaths: string[] = [];
@@ -902,6 +1053,11 @@ function readStoredFsPaths(stored: unknown): string[] {
 function sameStringArray(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false;
   return a.every((value, index) => sameFsPath(value, b[index]));
+}
+
+function sameExtensionArray(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((value, index) => value === b[index]);
 }
 
 function sameFsPath(a: string, b: string): boolean {

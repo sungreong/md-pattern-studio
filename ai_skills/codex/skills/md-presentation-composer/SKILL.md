@@ -247,6 +247,7 @@ These are structurally prevented by the engine, but avoid introducing them in co
 - No blank pages (section with no meaningful content).
 - Dense tables/images/code → prioritize page separation.
 - Before using `.stats` on table data, apply `references/component-selection-rules.md`; evidence matrices should remain tables.
+- Do not author raw HTML. Replace `<details>/<summary>` with `[!NOTE]`, `.message`, `.card`, visible table/code, or appendix slides.
 - UTF-8 encoding — detect and recover garbled characters.
 - Heading hierarchy must not skip levels or have empty headings.
 - Images should have `alt` / `caption`; tables should have `caption`; code blocks should have a language tag.

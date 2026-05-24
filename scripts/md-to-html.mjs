@@ -13,6 +13,7 @@ import {
 } from '../public/core/engine.js';
 import { TemplateRegistry } from '../public/core/registry.js';
 import { buildStandaloneHtmlDocument } from '../public/core/export-standalone.js';
+import { buildAppearanceRootAttributes, normalizeAppearanceOptions } from '../public/core/appearance.js';
 import { buildBrandDesignStyle, getBrandDesign, normalizeBrandDesignSlug } from '../public/core/brand-designs.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,7 +30,7 @@ const EMAIL_DISCLAIMER_CONFIRM_RE =
 
 function printUsage() {
   console.log(`Usage:
-  node scripts/md-to-html.mjs <input.md> [--out output.html] [--theme report] [--design vercel] [--mode web] [--standalone] [--base-dir path] [--embed-local-images|--no-embed-local-images] [--strip-email-disclaimer] [--mermaid|--no-mermaid]
+  node scripts/md-to-html.mjs <input.md> [--out output.html] [--theme report] [--design vercel] [--appearance clean] [--appearance-background plain] [--appearance-radius none] [--appearance-frame lines] [--viewer-chrome minimal] [--mode web] [--standalone] [--base-dir path] [--embed-local-images|--no-embed-local-images] [--strip-email-disclaimer] [--mermaid|--no-mermaid]
 
 Examples:
   node scripts/md-to-html.mjs test/notes.md
@@ -46,6 +47,11 @@ function parseArgs(argv) {
     design: '',
     mode: '',
     intent: '',
+    appearance: '',
+    appearanceBackground: '',
+    appearanceRadius: '',
+    appearanceFrame: '',
+    viewerChrome: '',
     standalone: true,
     baseDir: '',
     mermaid: null,
@@ -79,6 +85,26 @@ function parseArgs(argv) {
     }
     if (token === '--intent') {
       result.intent = args.shift() || '';
+      continue;
+    }
+    if (token === '--appearance') {
+      result.appearance = args.shift() || '';
+      continue;
+    }
+    if (token === '--appearance-background') {
+      result.appearanceBackground = args.shift() || '';
+      continue;
+    }
+    if (token === '--appearance-radius') {
+      result.appearanceRadius = args.shift() || '';
+      continue;
+    }
+    if (token === '--appearance-frame') {
+      result.appearanceFrame = args.shift() || '';
+      continue;
+    }
+    if (token === '--viewer-chrome') {
+      result.viewerChrome = args.shift() || '';
       continue;
     }
     if (token === '--standalone') {
@@ -454,6 +480,7 @@ function buildRenderedHtml(source, options, registry) {
   const effectiveTheme = options.theme || model.meta.theme || brandDesign?.theme || 'report';
   const effectiveMode = options.mode || model.meta.mode || 'web';
   const effectiveIntent = options.intent || model.meta.intent || brandDesign?.intent || '';
+  const appearance = normalizeAppearanceOptions(options, model.meta);
   const sourceBaseDir = String(options.sourceBaseDir || model.meta.sourceBaseDir || '').trim();
   const resolveAssetUrl = createNodeAssetResolver(sourceBaseDir);
   const enableMermaid = options.enableMermaid !== false;
@@ -467,6 +494,7 @@ function buildRenderedHtml(source, options, registry) {
   if (segments.length <= 1) {
     return {
       model,
+      appearance,
       warnings,
       html: renderDocument(
         model,
@@ -477,6 +505,7 @@ function buildRenderedHtml(source, options, registry) {
           tocDepth: Number(model.meta.tocDepth || 3),
           mode: effectiveMode,
           intent: effectiveIntent,
+          ...appearance,
           sourceBaseDir,
           resolveAssetUrl,
           enableMermaid,
@@ -499,6 +528,7 @@ function buildRenderedHtml(source, options, registry) {
         tocDepth: Number(model.meta.tocDepth || 3),
         mode: effectiveMode,
         intent: effectiveIntent,
+        ...appearance,
         sourceBaseDir,
         resolveAssetUrl,
         enableMermaid,
@@ -513,6 +543,7 @@ function buildRenderedHtml(source, options, registry) {
   if (!pages.length) {
     return {
       model,
+      appearance,
       warnings,
       html: renderDocument(
         model,
@@ -523,6 +554,7 @@ function buildRenderedHtml(source, options, registry) {
           tocDepth: Number(model.meta.tocDepth || 3),
           mode: effectiveMode,
           intent: effectiveIntent,
+          ...appearance,
           sourceBaseDir,
           resolveAssetUrl,
           enableMermaid,
@@ -554,12 +586,16 @@ function buildRenderedHtml(source, options, registry) {
 
   const intentClass = effectiveIntent ? ` intent-${effectiveIntent}` : '';
   const designClass = brandDesign?.className ? ` design-${brandDesign.className}` : '';
+  const appearanceAttrs = buildAppearanceRootAttributes(appearance);
+  const appearanceClass = appearanceAttrs.className ? ` ${escapeHtmlText(appearanceAttrs.className)}` : '';
+  const appearanceData = appearanceAttrs.attrs ? ` ${appearanceAttrs.attrs}` : '';
   const designStyle = brandDesign ? buildBrandDesignStyle(brandDesign) : '';
   return {
     model,
+    appearance,
     warnings,
     html: `
-      <div class="studio-document theme-${escapeHtmlText(effectiveTheme)} mode-${escapeHtmlText(effectiveMode)}${escapeHtmlText(intentClass)}${escapeHtmlText(designClass)}" style="${escapeHtmlText(`${designStyle}--page-width:${width};--page-height:${height};`)}">
+      <div class="studio-document theme-${escapeHtmlText(effectiveTheme)} mode-${escapeHtmlText(effectiveMode)}${escapeHtmlText(intentClass)}${escapeHtmlText(designClass)}${appearanceClass}"${appearanceData} style="${escapeHtmlText(`${designStyle}--page-width:${width};--page-height:${height};`)}">
         <div class="document-shell is-paginated">
           ${content}
         </div>
@@ -578,6 +614,7 @@ function buildStandaloneHtml(rendered, model, cssText, options = {}) {
     outlineItems: model?.sections || [],
     enableMermaid: options.enableMermaid !== false,
     exportWarnings: options.exportWarnings || [],
+    appearance: options.appearance || {},
   });
 }
 
@@ -602,13 +639,18 @@ async function main() {
   const registry = new TemplateRegistry();
   registerBuiltInTemplates(registry);
 
-  const { model, html: renderedHtml, warnings: renderWarnings = [] } = buildRenderedHtml(
+  const { model, appearance, html: renderedHtml, warnings: renderWarnings = [] } = buildRenderedHtml(
     source,
     {
       theme: args.theme,
       design: args.design,
       mode: args.mode,
       intent: args.intent,
+      appearance: args.appearance,
+      appearanceBackground: args.appearanceBackground,
+      appearanceRadius: args.appearanceRadius,
+      appearanceFrame: args.appearanceFrame,
+      viewerChrome: args.viewerChrome,
       sourceBaseDir,
       enableMermaid,
       enableCodeCopy,
@@ -627,7 +669,7 @@ async function main() {
   if (args.standalone) {
     const cssPath = path.join(rootDir, 'public', 'document.css');
     const css = await fs.readFile(cssPath, 'utf8');
-    output = buildStandaloneHtml(html, model, css, { enableMermaid, exportWarnings });
+    output = buildStandaloneHtml(html, model, css, { enableMermaid, exportWarnings, appearance });
   }
 
   await fs.mkdir(path.dirname(outPath), { recursive: true });

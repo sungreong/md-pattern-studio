@@ -4,10 +4,24 @@ import { buildStandaloneHtmlDocument } from '/core/export-standalone.js';
 import { SNIPPETS } from '/core/snippets.js';
 import { analyzeMarkdownQuality } from '/core/quality.js';
 import { BRAND_DESIGN_LIST, buildBrandDesignStyle, getBrandDesign, normalizeBrandDesignSlug } from '/core/brand-designs.js';
+import {
+  APPEARANCE_BACKGROUND_OPTIONS,
+  APPEARANCE_FRAME_OPTIONS,
+  APPEARANCE_PRESET_OPTIONS,
+  APPEARANCE_RADIUS_OPTIONS,
+  VIEWER_CHROME_OPTIONS,
+  buildAppearanceRootAttributes,
+  normalizeAppearanceOptions,
+} from '/core/appearance.js';
 
 const STORAGE_KEY_MD = 'markdown-pattern-studio:markdown';
 const STORAGE_KEY_THEME = 'markdown-pattern-studio:theme';
 const STORAGE_KEY_DESIGN = 'markdown-pattern-studio:design';
+const STORAGE_KEY_APPEARANCE = 'markdown-pattern-studio:appearance';
+const STORAGE_KEY_APPEARANCE_BACKGROUND = 'markdown-pattern-studio:appearance-background';
+const STORAGE_KEY_APPEARANCE_RADIUS = 'markdown-pattern-studio:appearance-radius';
+const STORAGE_KEY_APPEARANCE_FRAME = 'markdown-pattern-studio:appearance-frame';
+const STORAGE_KEY_VIEWER_CHROME = 'markdown-pattern-studio:viewer-chrome';
 const STORAGE_KEY_SOURCE_BASE = 'markdown-pattern-studio:source-base';
 
 const registry = new TemplateRegistry();
@@ -18,6 +32,11 @@ const dom = {
   editorModePill: document.getElementById('editorModePill'),
   themeSelect: document.getElementById('themeSelect'),
   designSelect: document.getElementById('designSelect'),
+  appearanceSelect: document.getElementById('appearanceSelect'),
+  appearanceBackgroundSelect: document.getElementById('appearanceBackgroundSelect'),
+  appearanceRadiusSelect: document.getElementById('appearanceRadiusSelect'),
+  appearanceFrameSelect: document.getElementById('appearanceFrameSelect'),
+  viewerChromeSelect: document.getElementById('viewerChromeSelect'),
   loadSampleBtn: document.getElementById('loadSampleBtn'),
   openMdBtn: document.getElementById('openMdBtn'),
   openMdInput: document.getElementById('openMdInput'),
@@ -54,6 +73,11 @@ const state = {
   selectedSectionId: '',
   themeOverride: localStorage.getItem(STORAGE_KEY_THEME) || 'auto',
   designOverride: localStorage.getItem(STORAGE_KEY_DESIGN) || 'auto',
+  appearanceOverride: localStorage.getItem(STORAGE_KEY_APPEARANCE) || 'auto',
+  appearanceBackgroundOverride: localStorage.getItem(STORAGE_KEY_APPEARANCE_BACKGROUND) || 'default',
+  appearanceRadiusOverride: localStorage.getItem(STORAGE_KEY_APPEARANCE_RADIUS) || 'default',
+  appearanceFrameOverride: localStorage.getItem(STORAGE_KEY_APPEARANCE_FRAME) || 'default',
+  viewerChromeOverride: localStorage.getItem(STORAGE_KEY_VIEWER_CHROME) || 'full',
   sourceBaseDir: localStorage.getItem(STORAGE_KEY_SOURCE_BASE) || '',
   renderTimer: null,
   statusTimer: null,
@@ -140,12 +164,32 @@ boot();
 async function boot() {
   populateThemeSelect();
   populateDesignSelect();
+  populateAppearanceControls();
   renderSnippetGrid();
   renderPatternGuide();
   bindEvents();
   await restoreOrLoadSample();
   await initEditor();
   render();
+}
+
+function populateOptionSelect(select, options, value, leadingOptions = []) {
+  if (!select) return;
+  const allOptions = [...leadingOptions, ...options];
+  select.innerHTML = allOptions
+    .map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`)
+    .join('');
+  select.value = allOptions.some((item) => item.value === value) ? value : allOptions[0]?.value || '';
+}
+
+function populateAppearanceControls() {
+  populateOptionSelect(dom.appearanceSelect, APPEARANCE_PRESET_OPTIONS, state.appearanceOverride, [
+    { value: 'auto', label: 'front matter 따르기' },
+  ]);
+  populateOptionSelect(dom.appearanceBackgroundSelect, APPEARANCE_BACKGROUND_OPTIONS, state.appearanceBackgroundOverride);
+  populateOptionSelect(dom.appearanceRadiusSelect, APPEARANCE_RADIUS_OPTIONS, state.appearanceRadiusOverride);
+  populateOptionSelect(dom.appearanceFrameSelect, APPEARANCE_FRAME_OPTIONS, state.appearanceFrameOverride);
+  populateOptionSelect(dom.viewerChromeSelect, VIEWER_CHROME_OPTIONS, state.viewerChromeOverride);
 }
 
 function populateThemeSelect() {
@@ -203,6 +247,36 @@ function bindEvents() {
   dom.designSelect?.addEventListener('change', () => {
     state.designOverride = dom.designSelect.value;
     localStorage.setItem(STORAGE_KEY_DESIGN, state.designOverride);
+    render();
+  });
+
+  dom.appearanceSelect?.addEventListener('change', () => {
+    state.appearanceOverride = dom.appearanceSelect.value;
+    localStorage.setItem(STORAGE_KEY_APPEARANCE, state.appearanceOverride);
+    render();
+  });
+
+  dom.appearanceBackgroundSelect?.addEventListener('change', () => {
+    state.appearanceBackgroundOverride = dom.appearanceBackgroundSelect.value;
+    localStorage.setItem(STORAGE_KEY_APPEARANCE_BACKGROUND, state.appearanceBackgroundOverride);
+    render();
+  });
+
+  dom.appearanceRadiusSelect?.addEventListener('change', () => {
+    state.appearanceRadiusOverride = dom.appearanceRadiusSelect.value;
+    localStorage.setItem(STORAGE_KEY_APPEARANCE_RADIUS, state.appearanceRadiusOverride);
+    render();
+  });
+
+  dom.appearanceFrameSelect?.addEventListener('change', () => {
+    state.appearanceFrameOverride = dom.appearanceFrameSelect.value;
+    localStorage.setItem(STORAGE_KEY_APPEARANCE_FRAME, state.appearanceFrameOverride);
+    render();
+  });
+
+  dom.viewerChromeSelect?.addEventListener('change', () => {
+    state.viewerChromeOverride = dom.viewerChromeSelect.value;
+    localStorage.setItem(STORAGE_KEY_VIEWER_CHROME, state.viewerChromeOverride);
     render();
   });
 
@@ -691,10 +765,21 @@ function buildRenderBundle(source) {
   const brandDesignForDefaults = getBrandDesign(design);
   const theme = dom.themeSelect.value === 'auto' ? model.meta.theme || brandDesignForDefaults?.theme || 'report' : dom.themeSelect.value;
   const intent = model.meta.intent || brandDesignForDefaults?.intent || '';
+  const appearance = normalizeAppearanceOptions(
+    {
+      appearance: dom.appearanceSelect?.value === 'auto' ? undefined : dom.appearanceSelect?.value,
+      appearanceBackground: dom.appearanceBackgroundSelect?.value,
+      appearanceRadius: dom.appearanceRadiusSelect?.value,
+      appearanceFrame: dom.appearanceFrameSelect?.value,
+      viewerChrome: dom.viewerChromeSelect?.value,
+    },
+    model.meta,
+  );
   const options = {
     theme,
     design,
     intent,
+    ...appearance,
     toc: Boolean(model.meta.toc),
     tocDepth: Number(model.meta.tocDepth || 3),
     mode: model.meta.mode || 'web',
@@ -757,6 +842,9 @@ function buildRenderBundle(source) {
   const brandDesign = getBrandDesign(options.design);
   const designClass = brandDesign?.className ? ` design-${escapeHtml(brandDesign.className)}` : '';
   const intentClass = options.intent ? ` intent-${escapeHtml(options.intent)}` : '';
+  const appearanceAttrs = buildAppearanceRootAttributes(appearance);
+  const appearanceClass = appearanceAttrs.className ? ` ${escapeHtml(appearanceAttrs.className)}` : '';
+  const appearanceData = appearanceAttrs.attrs ? ` ${appearanceAttrs.attrs}` : '';
   const designStyle = brandDesign ? buildBrandDesignStyle(brandDesign) : '';
   const styleAttr = `${designStyle}--page-width:${escapeHtml(width)};--page-height:${escapeHtml(height)};`;
 
@@ -764,7 +852,7 @@ function buildRenderBundle(source) {
     model,
     options,
     html: `
-      <div class="studio-document theme-${escapeHtml(options.theme)} mode-${escapeHtml(options.mode)}${intentClass}${designClass}" style="${escapeHtml(styleAttr)}">
+      <div class="studio-document theme-${escapeHtml(options.theme)} mode-${escapeHtml(options.mode)}${intentClass}${designClass}${appearanceClass}"${appearanceData} style="${escapeHtml(styleAttr)}">
         <div class="document-shell is-paginated">
           ${pageHtml}
         </div>
@@ -1239,6 +1327,7 @@ async function buildStandaloneHtml() {
     outlineItems: model.sections || [],
     enableMermaid: true,
     exportWarnings,
+    appearance: bundle.options,
   });
 }
 

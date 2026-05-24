@@ -1,4 +1,5 @@
 import { PAGE_BREAK_TOKEN, buildPaginatedSegments } from './pagination.js';
+import { buildAppearanceRootAttributes, normalizeAppearanceOptions } from './appearance.js';
 import { buildBrandDesignStyle, getBrandDesign } from './brand-designs.js';
 
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
@@ -383,6 +384,62 @@ function parseBlocks(lines, sectionId, context = {}) {
     }
     return { fence, lang, title };
   };
+  const isDetailsStartLine = (value) => /^\s*<details(?:\s[^>]*)?>/i.test(String(value || '').trim());
+  const isDetailsCloseLine = (value) => /<\/details\s*>/i.test(String(value || ''));
+  const parseDetailsBlock = (startIndex) => {
+    const detailsLines = [];
+    let cursor = startIndex;
+    let fenceToken = '';
+    let foundClose = false;
+
+    while (cursor < lines.length) {
+      const current = lines[cursor] || '';
+      const trimmed = current.trim();
+      const fence = trimmed.match(/^(```+|~~~+)/);
+      if (fence) {
+        if (!fenceToken) {
+          fenceToken = fence[1];
+        } else if (fence[1] === fenceToken) {
+          fenceToken = '';
+        }
+      }
+      detailsLines.push(current);
+      cursor += 1;
+      if (!fenceToken && isDetailsCloseLine(current)) {
+        foundClose = true;
+        break;
+      }
+    }
+
+    if (!foundClose) return null;
+
+    const raw = detailsLines.join('\n');
+    let inner = raw
+      .replace(/^\s*<details(?:\s[^>]*)?>\s*/i, '')
+      .replace(/\s*<\/details\s*>\s*$/i, '');
+    let title = 'Details';
+    const summary = inner.match(/^\s*<summary(?:\s[^>]*)?>([\s\S]*?)<\/summary>\s*/i);
+    if (summary) {
+      title = String(summary[1] || '').replace(/\s+/g, ' ').trim() || title;
+      inner = inner.slice(summary[0].length);
+    }
+
+    const bodyLines = inner.replace(/^\n+|\n+$/g, '').split('\n');
+    const id = nextBlockId('quote');
+    return {
+      block: {
+        type: 'callout',
+        id,
+        calloutType: 'note',
+        title,
+        classes: ['from-details'],
+        attrs: {},
+        anchorId: '',
+        blocks: parseBlocks(bodyLines, `${id}__body`, context),
+      },
+      nextIndex: cursor,
+    };
+  };
   const resolveReference = (label = '') => {
     const key = normalizeReferenceLabel(label);
     return key ? context.references?.[key] : null;
@@ -446,6 +503,15 @@ function parseBlocks(lines, sectionId, context = {}) {
         block = applyAttributes(block, attrInfo);
         blocks.push(block);
         i = nextIndex;
+        continue;
+      }
+    }
+
+    if (isDetailsStartLine(line)) {
+      const parsedDetails = parseDetailsBlock(i);
+      if (parsedDetails) {
+        blocks.push(parsedDetails.block);
+        i = parsedDetails.nextIndex;
         continue;
       }
     }
@@ -521,7 +587,7 @@ function parseBlocks(lines, sectionId, context = {}) {
       const next = lines[i];
       if (isBlank(next)) break;
       if (parseBlockAttributeLine(next)) break;
-      if (isFenceStart(next.trim()) || IMAGE_RE.test(next.trim()) || IMAGE_REF_RE.test(next.trim()) || /^>\s?/.test(next) || LIST_RE.test(next) || /^(-{3,}|\*{3,})\s*$/.test(next.trim())) break;
+      if (isFenceStart(next.trim()) || isDetailsStartLine(next) || IMAGE_RE.test(next.trim()) || IMAGE_REF_RE.test(next.trim()) || /^>\s?/.test(next) || LIST_RE.test(next) || /^(-{3,}|\*{3,})\s*$/.test(next.trim())) break;
       if (next.includes('|') && tableSeparator(lines[i + 1])) break;
       paragraphLines.push(next);
       i += 1;
@@ -793,6 +859,7 @@ export function renderDocument(model, options = {}, registry) {
   const theme = options.theme || model.meta.theme || brandDesign?.theme || 'report';
   const mode = options.mode || model.meta.mode || 'web';
   const intent = options.intent || model.meta.intent || brandDesign?.intent || '';
+  const appearance = normalizeAppearanceOptions(options, model.meta);
   const showToc = options.toc ?? Boolean(model.meta.toc);
   const tocDepth = Number(options.tocDepth || model.meta.tocDepth || 3);
 
@@ -831,10 +898,13 @@ export function renderDocument(model, options = {}, registry) {
 
   const intentClass = intent ? ` intent-${escapeHtml(intent)}` : '';
   const designClass = brandDesign?.className ? ` design-${escapeHtml(brandDesign.className)}` : '';
+  const appearanceAttrs = buildAppearanceRootAttributes(appearance);
+  const appearanceClass = appearanceAttrs.className ? ` ${escapeHtml(appearanceAttrs.className)}` : '';
+  const appearanceData = appearanceAttrs.attrs ? ` ${appearanceAttrs.attrs}` : '';
   const designStyle = brandDesign ? buildBrandDesignStyle(brandDesign) : '';
   const styleAttr = designStyle ? ` style="${escapeHtml(designStyle)}"` : '';
   return `
-    <div class="studio-document theme-${escapeHtml(theme)} mode-${escapeHtml(mode)}${intentClass}${designClass}"${styleAttr}>
+    <div class="studio-document theme-${escapeHtml(theme)} mode-${escapeHtml(mode)}${intentClass}${designClass}${appearanceClass}"${appearanceData}${styleAttr}>
       <div class="${shellClass}">
         ${content}
       </div>

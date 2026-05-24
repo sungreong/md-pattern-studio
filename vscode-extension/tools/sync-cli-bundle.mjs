@@ -12,6 +12,7 @@ const filePairs = [
   ['scripts/md-to-html.mjs', 'scripts/md-to-html.mjs'],
   ['public/core/engine.js', 'public/core/engine.js'],
   ['public/core/export-standalone.js', 'public/core/export-standalone.js'],
+  ['public/core/appearance.js', 'public/core/appearance.js'],
   ['public/core/pagination.js', 'public/core/pagination.js'],
   ['public/core/quality.js', 'public/core/quality.js'],
   ['public/core/registry.js', 'public/core/registry.js'],
