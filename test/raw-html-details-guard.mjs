@@ -57,6 +57,14 @@ const detailsQuality = analyzeMarkdownQuality(detailsSource, parseMarkdownDocume
 assert(detailsQuality.issues.some((issue) => issue.title === 'HTML details 변환'), 'details warning should be emitted');
 assert(!detailsQuality.issues.some((issue) => issue.title === '닫히지 않은 details 블록'), 'closed details should not emit unclosed error');
 
+const smallHtml = render(`
+## Small Text
+
+Normal <small>caption **strong** \`code\` [link](https://example.com)</small> after.
+`);
+assert(smallHtml.includes('<small>caption <strong>strong</strong> <code>code</code> <a href="https://example.com" target="_blank" rel="noreferrer">link</a></small>'), 'inline small should render with nested Markdown formatting');
+assert(!smallHtml.includes('&lt;small&gt;'), 'inline small should not render as escaped literal text');
+
 const brokenQuality = analyzeMarkdownQuality(`
 ## Broken
 
@@ -88,5 +96,15 @@ const fencedRendered = render(fencedHtml);
 const fencedQuality = analyzeMarkdownQuality(fencedHtml, parseMarkdownDocument(fencedHtml));
 assert(!fencedRendered.includes('md-callout type-note'), 'details inside code fences should not become a callout');
 assert(!fencedQuality.issues.some((issue) => issue.title.includes('HTML') || issue.title.includes('raw HTML')), 'details inside code fences should not emit raw HTML warnings');
+
+const fencedSmallRendered = render(`
+## Code Small
+
+\`\`\`html
+<small>Code only</small>
+\`\`\`
+`);
+assert(!fencedSmallRendered.includes('<small>Code only</small>'), 'small inside code fences should stay escaped in code output');
+assert(fencedSmallRendered.includes('&lt;small&gt;Code only&lt;/small&gt;'), 'small inside code fences should remain visible as code text');
 
 console.log('raw-html-details-guard ok');

@@ -16,7 +16,7 @@ npm run package:vsix
 ### Install
 
 ```bash
-code --install-extension .\markdown-pattern-studio-preview-0.1.19.vsix --force
+code --install-extension .\markdown-pattern-studio-preview-0.1.20.vsix --force
 ```
 
 ### Basic Usage
@@ -183,7 +183,7 @@ Example (absolute path):
 - Source: `vscode-extension/src/extension.ts`
 - Build: `npm run build`
 - Package: `npm run package:vsix`
-- Install test: `code --install-extension .\markdown-pattern-studio-preview-0.1.19.vsix --force`
+- Install test: `code --install-extension .\markdown-pattern-studio-preview-0.1.20.vsix --force`
 
 ## 10) Uninstall / Cleanup Guide
 
@@ -206,7 +206,7 @@ Find `local.markdown-pattern-studio-preview@...` in the list.
 If you no longer need the package file, delete:
 
 ```text
-vscode-extension/markdown-pattern-studio-preview-0.1.19.vsix
+vscode-extension/markdown-pattern-studio-preview-0.1.20.vsix
 ```
 
 ### Optional: remove local extension folder manually
@@ -214,5 +214,5 @@ vscode-extension/markdown-pattern-studio-preview-0.1.19.vsix
 If needed, remove this folder:
 
 ```text
-%USERPROFILE%\.vscode\extensions\local.markdown-pattern-studio-preview-0.1.19
+%USERPROFILE%\.vscode\extensions\local.markdown-pattern-studio-preview-0.1.20
 ```

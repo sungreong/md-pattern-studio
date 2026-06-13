@@ -770,11 +770,13 @@ function resolveReference(context, label = '') {
 export function renderInline(text = '', context = {}) {
   const codeTokens = [];
   const escapeTokens = [];
+  const smallTokens = [];
   const brToken = '@@BR@@';
   let working = String(text ?? '');
 
   working = working.replace(/\\(.)/g, (_, token) => `@@ESC${escapeTokens.push(escapeHtml(token)) - 1}@@`);
   working = working.replace(/`([^`]+)`/g, (_, code) => `@@CODE${codeTokens.push(escapeHtml(code)) - 1}@@`);
+  working = working.replace(/<small>([\s\S]*?)<\/small>/gi, (_, inner) => `@@SMALL${smallTokens.push(inner) - 1}@@`);
   working = escapeHtml(working);
 
   working = working
@@ -806,8 +808,15 @@ export function renderInline(text = '', context = {}) {
   working = working.replace(/(^|\W)_([^_]+)_(?=\W|$)/g, '$1<em>$2</em>');
   working = working.replace(/~~([^~]+)~~/g, '<del>$1</del>');
   working = working.replace(new RegExp(brToken, 'g'), '<br />');
-  working = working.replace(/@@CODE(\d+)@@/g, (_, index) => `<code>${codeTokens[Number(index)] || ''}</code>`);
-  working = working.replace(/@@ESC(\d+)@@/g, (_, index) => escapeTokens[Number(index)] || '');
+  working = working.replace(/@@SMALL(\d+)@@/g, (_, index) => `<small>${renderInline(smallTokens[Number(index)] || '', context)}</small>`);
+  working = working.replace(/@@CODE(\d+)@@/g, (_, index) => {
+    const tokenIndex = Number(index);
+    return Object.prototype.hasOwnProperty.call(codeTokens, tokenIndex) ? `<code>${codeTokens[tokenIndex]}</code>` : `@@CODE${index}@@`;
+  });
+  working = working.replace(/@@ESC(\d+)@@/g, (_, index) => {
+    const tokenIndex = Number(index);
+    return Object.prototype.hasOwnProperty.call(escapeTokens, tokenIndex) ? escapeTokens[tokenIndex] : `@@ESC${index}@@`;
+  });
   return working;
 }
 

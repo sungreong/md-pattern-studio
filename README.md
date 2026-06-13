@@ -271,7 +271,12 @@ npm run test:embed-images
 
 이 화면은 VS Code에서 Markdown을 저장했을 때, 확장이 CLI 렌더링 결과를 Webview로 보여주고 Outline/페이지 네비게이션을 제공하는 상태입니다.
 
-### 최근 VS Code Extension 업데이트 (0.1.19 — 2026-05-24)
+### 최근 VS Code Extension 업데이트 (0.1.20 — 2026-06-13)
+
+- **Inline `<small>` 지원**: Markdown 문장 안의 `<small>...</small>`을 caption 스타일로 렌더링하고, 내부의 굵게/코드/링크 같은 인라인 Markdown도 함께 처리합니다.
+- **CLI/VS Code 번들 동기화**: 웹 렌더러와 VS Code 확장 번들 렌더러에 동일한 small 텍스트 처리와 스타일을 반영했습니다.
+
+### VS Code Extension 업데이트 (0.1.19 — 2026-05-24)
 
 - **Style 메뉴 연동**: VS Code Preview와 `MD Studio: Transform Markdown to Styled HTML`이 같은 외형 옵션을 사용합니다.
 - **Fill 줌 추가**: Slides 모드에서 `Fill` 또는 `Ctrl+9`로 페이지를 가로폭에 맞춰 크게 볼 수 있고, Stack 전환 시 줌 상태가 자동 정리됩니다.
@@ -351,7 +356,7 @@ npm run package:vsix
 설치:
 
 ```bash
-code --install-extension .\markdown-pattern-studio-preview-0.1.19.vsix
+code --install-extension .\markdown-pattern-studio-preview-0.1.20.vsix
 ```
 
 ### 커서 동기화 동작 (Ctrl+S)
@@ -496,6 +501,13 @@ npm run md2html -- public/examples/design-showcase.md --theme midnight --intent 
 
 ## 변경 이력
 
+### VS Code Extension 0.1.20 — 2026-06-13
+
+- 문장 안의 `<small>...</small>`을 안전한 caption HTML로 렌더링하고, 내부 Markdown 인라인 서식을 지원
+- standalone HTML과 VS Code 번들 CSS에 `.studio-document small` 스타일 추가
+- CLI/렌더러 회귀 테스트로 raw HTML details 및 small 텍스트 처리 검증 보강
+- 최신 VSIX: `vscode-extension/markdown-pattern-studio-preview-0.1.20.vsix`
+
 ### VS Code Extension 0.1.19 — 2026-05-24
 
 - 웹/CLI/VS Code Preview에 공통 `appearance` 옵션을 추가하고, standalone HTML에도 Style 메뉴를 포함
@@ -504,7 +516,6 @@ npm run md2html -- public/examples/design-showcase.md --theme midnight --intent 
 - 기본 CLI 설정에서 확장 번들 렌더러를 우선 사용해 최신 뷰어 컨트롤을 안정적으로 제공
 - `<details>/<summary>`를 정적 note callout으로 변환하고 지원하지 않는 raw HTML 품질 경고를 추가
 - `md-presentation-composer` 스킬에 raw HTML 금지와 details 대체 작성 규칙을 보강
-- 최신 VSIX: `vscode-extension/markdown-pattern-studio-preview-0.1.19.vsix`
 
 ### v0.3.1 — 2026-05-01 (PPTX-skill Design System)
 
