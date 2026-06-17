@@ -2,7 +2,7 @@
   "name": "markdown-pattern-studio-preview",
   "displayName": "Markdown Pattern Studio Preview",
   "description": "Preview Markdown Pattern Studio CLI output in a VS Code webview.",
-  "version": "0.1.20",
+  "version": "0.1.29",
   "publisher": "local",
   "repository": {
     "type": "git",
@@ -19,6 +19,9 @@
     "onView:mdStudioFileBrowser",
     "onCommand:mdStudioPreview.open",
     "onCommand:mdStudioPreview.refresh",
+    "onCommand:mdStudioPreview.openSourceEditor",
+    "onCommand:mdStudioPreview.enableAutoOnSave",
+    "onCommand:mdStudioPreview.disableAutoOnSave",
     "onCommand:mdStudioPreview.openTemplateBuilder",
     "onCommand:mdStudioPreview.openFileInViewer",
     "onCommand:mdStudioPreview.openFileInNewPanel",
@@ -69,6 +72,21 @@
       {
         "command": "mdStudioPreview.refresh",
         "title": "MD Studio: Refresh"
+      },
+      {
+        "command": "mdStudioPreview.openSourceEditor",
+        "title": "MD Studio: Open Source Editor",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "mdStudioPreview.enableAutoOnSave",
+        "title": "MD Studio: Auto Refresh Off",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "mdStudioPreview.disableAutoOnSave",
+        "title": "MD Studio: Auto Refresh On",
+        "icon": "$(sync)"
       },
       {
         "command": "mdStudioPreview.openTemplateBuilder",
@@ -182,7 +200,7 @@
         "mdStudioPreview.autoOnSave": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically refresh preview when a markdown file is saved."
+          "description": "Automatically refresh an already-open preview when a markdown file is saved."
         },
         "mdStudioPreview.cursorSyncOnSave": {
           "type": "boolean",
@@ -290,6 +308,36 @@
       ],
       "editor/title": [
         {
+          "command": "mdStudioPreview.disableAutoOnSave",
+          "when": "(activeWebviewPanelId == 'mdStudioPreview' || activeWebviewPanelId == 'markdown.preview') && mdStudioPreview.autoOnSaveEnabled",
+          "group": "navigation@0"
+        },
+        {
+          "command": "mdStudioPreview.enableAutoOnSave",
+          "when": "(activeWebviewPanelId == 'mdStudioPreview' || activeWebviewPanelId == 'markdown.preview') && !mdStudioPreview.autoOnSaveEnabled",
+          "group": "navigation@0"
+        },
+        {
+          "command": "mdStudioPreview.openSourceEditor",
+          "when": "activeWebviewPanelId == 'mdStudioPreview' || activeWebviewPanelId == 'markdown.preview'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mdStudioPreview.disableAutoOnSave",
+          "when": "resourceLangId == markdown && mdStudioPreview.autoOnSaveEnabled",
+          "group": "navigation@18"
+        },
+        {
+          "command": "mdStudioPreview.enableAutoOnSave",
+          "when": "resourceLangId == markdown && !mdStudioPreview.autoOnSaveEnabled",
+          "group": "navigation@18"
+        },
+        {
+          "command": "mdStudioPreview.openSourceEditor",
+          "when": "resourceLangId == markdown",
+          "group": "navigation@19"
+        },
+        {
           "command": "mdStudioPreview.open",
           "when": "resourceLangId == markdown",
           "group": "navigation@20"
@@ -312,7 +360,7 @@
       ],
       "view/item/context": [
         {
-          "command": "mdStudioPreview.openFileInNewPanel",
+          "command": "mdStudioFileBrowser.openInEditor",
           "when": "view == mdStudioFileBrowser && (viewItem == mdFile || viewItem == mdFilePinned || viewItem == mdPinnedFile || viewItem == mdRecentFile || viewItem == mdFilterFile || viewItem == mdFilterFilePinned)",
           "group": "inline"
         },

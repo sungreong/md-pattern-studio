@@ -91,6 +91,7 @@ let lastBrowserKey: string | null = null; // tracks the panel opened via file br
 let outputChannel: vscode.OutputChannel | null = null;
 const outlineStateKeyPrefix = 'mdStudioPreview:outlineCollapsed:';
 const appearanceStateKey = 'mdStudioPreview:appearance';
+const autoOnSaveContextKey = 'mdStudioPreview.autoOnSaveEnabled';
 const defaultAppearanceOptions: AppearanceOptions = {
   appearance: 'default',
   appearanceBackground: 'default',
@@ -106,6 +107,7 @@ export function activate(context: vscode.ExtensionContext) {
   extensionContextRef = context;
   outputChannel = vscode.window.createOutputChannel('Markdown Pattern Studio');
   context.subscriptions.push(outputChannel);
+  void updateAutoOnSaveContext();
   context.subscriptions.push(
     vscode.commands.registerCommand('mdStudioPreview.open', async () => {
       const document = await resolveTargetDocument();
@@ -119,6 +121,24 @@ export function activate(context: vscode.ExtensionContext) {
       const document = await resolveTargetDocument();
       if (!document) return;
       await queuePreview(document, 'refresh');
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('mdStudioPreview.openSourceEditor', async (commandArg?: unknown) => {
+      await openMarkdownSourceEditor(commandArg);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('mdStudioPreview.enableAutoOnSave', async () => {
+      await setAutoOnSave(true);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('mdStudioPreview.disableAutoOnSave', async () => {
+      await setAutoOnSave(false);
     }),
   );
 
@@ -143,6 +163,14 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.onDidCloseTextDocument((document) => {
       cursorLineCache.delete(document.uri.toString());
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('mdStudioPreview.autoOnSave')) {
+        void updateAutoOnSaveContext();
+      }
     }),
   );
 
@@ -183,6 +211,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   fileBrowserController = registerMarkdownFileBrowser(context, {
+    openInEditor: openUriInTextEditor,
     resolveMarkdownUri: resolveMarkdownUriFromCommandArg,
     openInViewer: openMarkdownInBrowserPanel,
     openInNewPanel: openMarkdownInNewPanel,
@@ -218,6 +247,21 @@ function readConfig(): ExtensionConfig {
     rawPreferredViewMode === 'slides' || rawPreferredViewMode === 'stack' ? rawPreferredViewMode : 'auto';
   const stripEmailDisclaimer = config.get<boolean>('stripEmailDisclaimer', false);
   return { autoOnSave, cursorSyncOnSave, nodePath, cliScriptPath, preferredViewMode, extraArgs, stripEmailDisclaimer };
+}
+
+async function setAutoOnSave(enabled: boolean): Promise<void> {
+  const config = vscode.workspace.getConfiguration('mdStudioPreview');
+  const inspected = config.inspect<boolean>('autoOnSave');
+  const target =
+    inspected?.workspaceValue !== undefined ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+  await config.update('autoOnSave', enabled, target);
+  await updateAutoOnSaveContext();
+  await openPreferredViewForCurrentMarkdown(enabled);
+  void vscode.window.showInformationMessage(`MD Studio auto refresh on save: ${enabled ? 'On' : 'Off'}`);
+}
+
+async function updateAutoOnSaveContext(): Promise<void> {
+  await vscode.commands.executeCommand('setContext', autoOnSaveContextKey, readConfig().autoOnSave);
 }
 
 async function transformMarkdownToHtml(commandArg?: unknown): Promise<void> {
@@ -324,22 +368,108 @@ async function openMarkdownInNewPanel(uri: vscode.Uri): Promise<void> {
 }
 
 async function resolveTargetDocument(): Promise<vscode.TextDocument | null> {
+  const sourceDocument = await openMarkdownSourceEditor(undefined, false);
+  if (sourceDocument) return sourceDocument;
+
+  void vscode.window.showErrorMessage('Open a markdown file and try again.');
+  return null;
+}
+
+async function openMarkdownSourceEditor(commandArg?: unknown, showError = true): Promise<vscode.TextDocument | null> {
+  const commandUri = getUriFromCommandArg(commandArg);
+  if (commandUri && isMarkdownFileUri(commandUri)) {
+    return openMarkdownUriInEditor(commandUri);
+  }
+
   const active = vscode.window.activeTextEditor?.document;
   if (active && isMarkdownFile(active)) {
     cacheCursorLineFromEditor(vscode.window.activeTextEditor || null);
+    await vscode.window.showTextDocument(active, { preview: false, preserveFocus: false });
     return active;
   }
+
+  const activeTabUri = getActiveTabMarkdownUri();
+  if (activeTabUri) {
+    return openMarkdownUriInEditor(activeTabUri);
+  }
+
+  await revealBuiltinMarkdownSource();
+
+  const revealed = vscode.window.activeTextEditor?.document;
+  if (revealed && isMarkdownFile(revealed)) {
+    cacheCursorLineFromEditor(vscode.window.activeTextEditor || null);
+    return revealed;
+  }
+
   if (lastPreviewKey) {
     try {
       const uri = vscode.Uri.parse(lastPreviewKey);
-      const document = await vscode.workspace.openTextDocument(uri);
-      if (isMarkdownFile(document)) return document;
+      if (isMarkdownFileUri(uri)) {
+        return openMarkdownUriInEditor(uri);
+      }
     } catch {
       // Ignore and fall through to message.
     }
   }
-  void vscode.window.showErrorMessage('Open a markdown file and try again.');
+
+  if (showError) {
+    void vscode.window.showErrorMessage('Open a markdown file and try again.');
+  }
   return null;
+}
+
+async function openPreferredViewForCurrentMarkdown(viewerFirst: boolean): Promise<void> {
+  const active = vscode.window.activeTextEditor?.document;
+  if (active && isMarkdownFile(active)) {
+    if (viewerFirst) {
+      await queuePreview(active, 'open');
+    } else {
+      await openMarkdownUriInEditor(active.uri);
+    }
+    return;
+  }
+
+  if (!viewerFirst) {
+    await openMarkdownSourceEditor(undefined, false);
+    return;
+  }
+
+  const sourceDocument = await openMarkdownSourceEditor(undefined, false);
+  if (sourceDocument) {
+    await queuePreview(sourceDocument, 'open');
+  }
+}
+
+async function openUriInTextEditor(uri: vscode.Uri): Promise<void> {
+  const document = await vscode.workspace.openTextDocument(uri);
+  const editor = await vscode.window.showTextDocument(document, { preview: false, preserveFocus: false });
+  if (isMarkdownFile(document)) {
+    cacheCursorLineFromEditor(editor);
+  }
+}
+
+async function openMarkdownUriInEditor(uri: vscode.Uri): Promise<vscode.TextDocument | null> {
+  const document = await vscode.workspace.openTextDocument(uri);
+  if (!isMarkdownFile(document)) return null;
+  const editor = await vscode.window.showTextDocument(document, { preview: false, preserveFocus: false });
+  cacheCursorLineFromEditor(editor);
+  return document;
+}
+
+function getActiveTabMarkdownUri(): vscode.Uri | null {
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+  if (input instanceof vscode.TabInputText && isMarkdownFileUri(input.uri)) return input.uri;
+  if (input instanceof vscode.TabInputTextDiff && isMarkdownFileUri(input.modified)) return input.modified;
+  return null;
+}
+
+async function revealBuiltinMarkdownSource(): Promise<void> {
+  try {
+    await vscode.commands.executeCommand('markdown.showSource');
+    await delay(50);
+  } catch {
+    // The command is only available when VS Code's built-in markdown preview is active.
+  }
 }
 
 async function ensureSaved(document: vscode.TextDocument): Promise<boolean> {
@@ -371,13 +501,14 @@ function queuePreview(document: vscode.TextDocument, reason: PreviewReason): Pro
 async function previewDocument(document: vscode.TextDocument, reason: PreviewReason): Promise<void> {
   if (!isMarkdownFile(document)) return;
   const config = readConfig();
+  const key = document.uri.toString();
+  if (reason === 'save' && !sessions.has(key)) return;
   if (reason !== 'save') {
     const saved = await ensureSaved(document);
     if (!saved) return;
   }
   const syncTargetSectionId = reason === 'save' ? await resolveCursorSectionIdForSave(document) : null;
 
-  const key = document.uri.toString();
   const session = ensureSession(document, reason !== 'save');
   setPanelStatus(session.panel, `Rendering (${reason})...`);
 

@@ -76,6 +76,12 @@ interface LineCountCacheEntry {
   title?: string;
 }
 
+interface FolderSummary {
+  total: number;
+  recent: number;
+  stale: number;
+}
+
 export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<MarkdownFileItem> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<
     MarkdownFileItem | undefined | null
@@ -99,8 +105,12 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
   private recentRoot: MarkdownFileItem | null = null;
   private filterRoot: MarkdownFileItem | null = null;
   private metadataByPath = new Map<string, MarkdownFileMetadata>();
+  private folderSummaryByPath = new Map<string, FolderSummary>();
   private lineCountCache = new Map<string, LineCountCacheEntry>();
+  private allUris: vscode.Uri[] = [];
+  private visibleUris: vscode.Uri[] = [];
   private refreshRun = 0;
+  private initialized = false;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.sortOrder = readSortOrder(context);
@@ -110,21 +120,21 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
     this.recentPaths = readRecentPaths(context);
     this.hiddenPaths = readHiddenPaths(context);
     this.focusRootPath = readFocusRootPath(context);
-    this.resetFileWatcher();
     context.subscriptions.push(
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (!event.affectsConfiguration('mdStudioFileBrowser.extraExtensions')) return;
         const nextExtraExtensions = readExtraFileExtensions();
         if (sameExtensionArray(this.extraExtensions, nextExtraExtensions)) return;
         this.extraExtensions = nextExtraExtensions;
-        this.resetFileWatcher();
-        this.scheduleRefresh();
+        if (this.initialized) {
+          this.resetFileWatcher();
+          this.scheduleRefresh();
+        }
       }),
       {
         dispose: () => this.disposeWatcher(),
       },
     );
-    void this.refresh();
   }
 
   private resetFileWatcher(): void {
@@ -147,6 +157,7 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
   }
 
   private scheduleRefresh(): void {
+    if (!this.initialized) return;
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
     this.refreshTimer = setTimeout(() => void this.refresh(), 300);
   }
@@ -156,12 +167,17 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
   }
 
   getChildren(element?: MarkdownFileItem): vscode.ProviderResult<MarkdownFileItem[]> {
-    if (!element) return this.roots;
+    if (!element) {
+      if (!this.initialized) {
+        return this.refresh().then(() => this.roots);
+      }
+      return this.roots;
+    }
     if (!element.isDirectory) return [];
     if (element.contextValue === 'mdPinnedRoot') return this.tree.get(PINNED_ROOT_KEY) ?? [];
     if (element.contextValue === 'mdRecentRoot') return this.tree.get(RECENT_ROOT_KEY) ?? [];
     if (element.contextValue === 'mdFilterRoot') return this.tree.get(FILTER_ROOT_KEY) ?? [];
-    return this.tree.get(element.resourceUri.fsPath) ?? [];
+    return this.getOrBuildFolderChildren(element.resourceUri.fsPath);
   }
 
   // Required for treeView.reveal() to work
@@ -181,7 +197,14 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
     }
     if (this.roots.some((r) => r.resourceUri.fsPath === element.resourceUri.fsPath)) return null;
     const parentPath = path.dirname(element.resourceUri.fsPath);
-    return this.itemByPath.get(parentPath) ?? null;
+    const workspaceFolder = findWorkspaceFolderForPath(element.resourceUri.fsPath);
+    if (!workspaceFolder) return this.itemByPath.get(parentPath) ?? null;
+    if (sameFsPath(parentPath, workspaceFolder.uri.fsPath)) {
+      return (vscode.workspace.workspaceFolders?.length ?? 0) > 1
+        ? this.itemByPath.get(workspaceFolder.uri.fsPath) ?? null
+        : null;
+    }
+    return this.getOrCreateFolderItem(parentPath, workspaceFolder.uri.fsPath);
   }
 
   getSortOrder(): FileBrowserSortOrder {
@@ -254,7 +277,7 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
   }
 
   async findVisibleFiles(): Promise<vscode.Uri[]> {
-    const uris = await this.findAllFiles();
+    const uris = this.initialized ? this.allUris : await this.findAllFiles();
     return uris.filter((uri) => this.isVisibleByRule(uri));
   }
 
@@ -346,7 +369,7 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
       if (nextRecentPaths.length !== this.recentPaths.length) {
         this.recentPaths = nextRecentPaths;
         await this.persistRecentPaths();
-        await this.refresh();
+        this.scheduleRefresh();
       }
       return;
     }
@@ -359,7 +382,7 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
     if (sameStringArray(nextRecentPaths, this.recentPaths)) return;
     this.recentPaths = nextRecentPaths;
     await this.persistRecentPaths();
-    await this.refresh();
+    this.scheduleRefresh();
   }
 
   private getFindFilesPattern(): string {
@@ -371,6 +394,14 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
   }
 
   async refresh(): Promise<void> {
+    if (!this.initialized) {
+      this.initialized = true;
+      this.resetFileWatcher();
+    }
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = undefined;
+    }
     const refreshRun = ++this.refreshRun;
     this.tree.clear();
     this.itemByPath.clear();
@@ -379,6 +410,9 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
     this.recentRoot = null;
     this.filterRoot = null;
     this.metadataByPath.clear();
+    this.folderSummaryByPath.clear();
+    this.allUris = [];
+    this.visibleUris = [];
 
     const folders = vscode.workspace.workspaceFolders;
     if (!folders?.length) {
@@ -389,90 +423,26 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
     const uris = await this.findAllFiles();
     if (refreshRun !== this.refreshRun) return;
 
+    this.allUris = uris;
     this.pruneLineCountCache(uris);
     await this.prunePinnedPaths(uris);
     await this.pruneRecentPaths(uris);
-    const metadataByPath = await this.loadMetadata(uris);
+    const metadataByPath = this.shouldLoadMetadata() ? await this.loadMetadata(uris) : new Map();
     if (refreshRun !== this.refreshRun) return;
     this.metadataByPath = metadataByPath;
     const visibleUris = uris.filter((uri) => this.isVisibleByRule(uri));
-
-    // Build file items keyed by their parent folder
-    const folderFileMap = new Map<string, MarkdownFileItem[]>();
-    for (const uri of visibleUris) {
-      const dir = path.dirname(uri.fsPath);
-      if (!folderFileMap.has(dir)) folderFileMap.set(dir, []);
-      const item = new MarkdownFileItem(uri, false);
-      this.decorateFileItem(item);
-      folderFileMap.get(dir)!.push(item);
-      this.itemByPath.set(uri.fsPath, item);
-    }
+    this.visibleUris = visibleUris;
+    this.folderSummaryByPath = buildFolderSummaries(visibleUris, this.metadataByPath, folders);
 
     for (const workspaceFolder of folders) {
       const rootFsPath = workspaceFolder.uri.fsPath;
-
-      // Collect all directories that contain .md files under this workspace root
-      const leafDirs = [...folderFileMap.keys()].filter((d) => isSameOrDescendant(d, rootFsPath));
-
-      // Expand to all ancestor directories up to workspace root
-      const allDirs = new Set<string>(leafDirs);
-      for (const dir of leafDirs) {
-        let cur = path.dirname(dir);
-        while (isSameOrDescendant(cur, rootFsPath)) {
-          allDirs.add(cur);
-          if (cur === rootFsPath) break;
-          cur = path.dirname(cur);
-        }
-      }
-
-      // Create folder items and register in itemByPath
-      for (const dir of allDirs) {
-        if (dir === rootFsPath) continue;
-        if (!this.itemByPath.has(dir)) {
-          const item = new MarkdownFileItem(vscode.Uri.file(dir), true, path.basename(dir));
-          this.decorateFolderItem(item, dir, visibleUris);
-          this.itemByPath.set(dir, item);
-        }
-      }
-
-      // Build parent -> children mapping
-      const childrenOf = new Map<string, MarkdownFileItem[]>();
-      for (const dir of allDirs) {
-        const parent = dir === rootFsPath ? rootFsPath : path.dirname(dir);
-        if (!childrenOf.has(parent)) childrenOf.set(parent, []);
-        if (dir !== rootFsPath) {
-          const item = this.itemByPath.get(dir)!;
-          const siblings = childrenOf.get(parent)!;
-          if (!siblings.some((s) => s.resourceUri.fsPath === dir)) {
-            siblings.push(item);
-          }
-        }
-      }
-
-      // Attach file items to their parent folder
-      for (const [folder, files] of folderFileMap) {
-        if (!isSameOrDescendant(folder, rootFsPath)) continue;
-        if (!childrenOf.has(folder)) childrenOf.set(folder, []);
-        childrenOf.get(folder)!.push(...files);
-      }
-
-      // Sort and store each folder's children
-      for (const [folder, children] of childrenOf) {
-        if (folder === rootFsPath) continue;
-        this.tree.set(folder, sortChildren(children, this.sortOrder, this.metadataByPath));
-      }
-
-      const rootChildren = childrenOf.get(rootFsPath) ?? [];
       if (folders.length > 1) {
-        // Multi-root: wrap each workspace folder as a top-level expanded node
         const wsItem = new MarkdownFileItem(workspaceFolder.uri, true, workspaceFolder.name);
         wsItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-        this.tree.set(rootFsPath, sortChildren(rootChildren, this.sortOrder, this.metadataByPath));
         this.itemByPath.set(rootFsPath, wsItem);
         this.roots.push(wsItem);
       } else {
-        // Single-root: show root-level items directly
-        this.roots.push(...sortChildren(rootChildren, this.sortOrder, this.metadataByPath));
+        this.roots.push(...this.getOrBuildFolderChildren(rootFsPath));
       }
     }
 
@@ -481,13 +451,68 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
     this._onDidChangeTreeData.fire(null);
   }
 
+  private getOrBuildFolderChildren(folderPath: string): MarkdownFileItem[] {
+    const cached = this.tree.get(folderPath);
+    if (cached) return cached;
+
+    const childDirs = new Set<string>();
+    const children: MarkdownFileItem[] = [];
+    for (const uri of this.visibleUris) {
+      const parentPath = path.dirname(uri.fsPath);
+      if (sameFsPath(parentPath, folderPath)) {
+        const item = new MarkdownFileItem(uri, false);
+        this.decorateFileItem(item);
+        children.push(item);
+        this.itemByPath.set(uri.fsPath, item);
+        continue;
+      }
+
+      if (!isSameOrDescendant(parentPath, folderPath)) continue;
+      const relative = path.relative(folderPath, parentPath);
+      const firstSegment = relative.split(/[\\/]/).find(Boolean);
+      if (firstSegment) childDirs.add(path.join(folderPath, firstSegment));
+    }
+
+    for (const childDir of childDirs) {
+      const item = this.getOrCreateFolderItem(childDir, folderPath);
+      if (item) children.push(item);
+    }
+
+    const sorted = sortChildren(children, this.sortOrder, this.metadataByPath);
+    this.tree.set(folderPath, sorted);
+    return sorted;
+  }
+
+  private getOrCreateFolderItem(dir: string, parentBoundary: string): MarkdownFileItem | null {
+    const cached = this.itemByPath.get(dir);
+    if (cached) return cached;
+    if (!isSameOrDescendant(dir, parentBoundary)) return null;
+
+    const item = new MarkdownFileItem(vscode.Uri.file(dir), true, path.basename(dir));
+    this.decorateFolderItem(item, dir);
+    this.itemByPath.set(dir, item);
+    return item;
+  }
+
+  private shouldLoadMetadata(): boolean {
+    if (this.sortOrder !== 'nameAsc' && this.sortOrder !== 'nameDesc') return true;
+    return this.filterMode === 'stale' || this.filterMode === 'long' || this.filterMode === 'large';
+  }
+
+  private shouldReadMarkdownContentForMetadata(): boolean {
+    return this.sortOrder === 'lengthAsc' || this.sortOrder === 'lengthDesc' || this.filterMode === 'long';
+  }
+
   private async loadMetadata(uris: vscode.Uri[]): Promise<Map<string, MarkdownFileMetadata>> {
     const metadataByPath = new Map<string, MarkdownFileMetadata>();
     const gitStatusByPath = await readGitStatusByPath();
+    const readContent = this.shouldReadMarkdownContentForMetadata();
     await forEachWithConcurrency(uris, MAX_METADATA_READ_CONCURRENCY, async (uri) => {
       try {
         const stat = await vscode.workspace.fs.stat(uri);
-        const analysis = await this.getMarkdownAnalysis(uri, stat);
+        const analysis: { lineCount?: number; title?: string } = readContent
+          ? await this.getMarkdownAnalysis(uri, stat)
+          : {};
         const metadata: MarkdownFileMetadata = {
           ctime: stat.ctime,
           mtime: stat.mtime,
@@ -558,8 +583,8 @@ export class MarkdownFileBrowserProvider implements vscode.TreeDataProvider<Mark
     item.tooltip = buildMetadataTooltip(item.resourceUri.fsPath, metadata, true);
   }
 
-  private decorateFolderItem(item: MarkdownFileItem, dir: string, uris: vscode.Uri[]): void {
-    const summary = summarizeFolder(dir, uris, this.metadataByPath);
+  private decorateFolderItem(item: MarkdownFileItem, dir: string): void {
+    const summary = this.folderSummaryByPath.get(normalizeFsPath(dir)) ?? { total: 0, recent: 0, stale: 0 };
     if (!summary.total) return;
 
     const parts = [`${summary.total.toLocaleString()}파일`];
@@ -960,27 +985,34 @@ function formatFileSize(bytes: number): string {
   return `${value.toLocaleString(undefined, { maximumFractionDigits })}${units[unitIndex]}`;
 }
 
-function summarizeFolder(
-  folderPath: string,
+function buildFolderSummaries(
   uris: vscode.Uri[],
   metadataByPath: Map<string, MarkdownFileMetadata>,
-): { total: number; recent: number; stale: number } {
+  workspaceFolders: readonly vscode.WorkspaceFolder[],
+): Map<string, FolderSummary> {
+  const summaries = new Map<string, FolderSummary>();
   const now = Date.now();
-  let total = 0;
-  let recent = 0;
-  let stale = 0;
-
   for (const uri of uris) {
-    if (!isSameOrDescendant(path.dirname(uri.fsPath), folderPath)) continue;
-    total += 1;
     const metadata = metadataByPath.get(uri.fsPath);
-    if (metadata?.mtime === undefined) continue;
-    const ageMs = now - metadata.mtime;
-    if (ageMs >= 0 && ageMs <= RECENT_FOLDER_THRESHOLD_MS) recent += 1;
-    if (ageMs >= STALE_FILE_THRESHOLD_MS) stale += 1;
+    const recent = metadata?.mtime !== undefined && now - metadata.mtime >= 0 && now - metadata.mtime <= RECENT_FOLDER_THRESHOLD_MS;
+    const stale = metadata?.mtime !== undefined && now - metadata.mtime >= STALE_FILE_THRESHOLD_MS;
+    const workspaceFolder = workspaceFolders.find((folder) => isSameOrDescendant(uri.fsPath, folder.uri.fsPath));
+    if (!workspaceFolder) continue;
+
+    let current = path.dirname(uri.fsPath);
+    while (isSameOrDescendant(current, workspaceFolder.uri.fsPath)) {
+      const key = normalizeFsPath(current);
+      const summary = summaries.get(key) ?? { total: 0, recent: 0, stale: 0 };
+      summary.total += 1;
+      if (recent) summary.recent += 1;
+      if (stale) summary.stale += 1;
+      summaries.set(key, summary);
+      if (sameFsPath(current, workspaceFolder.uri.fsPath)) break;
+      current = path.dirname(current);
+    }
   }
 
-  return { total, recent, stale };
+  return summaries;
 }
 
 function pad2(value: number): string {
@@ -1006,6 +1038,11 @@ async function forEachWithConcurrency<T>(
 function isSameOrDescendant(candidatePath: string, rootPath: string): boolean {
   const relative = path.relative(rootPath, candidatePath);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function findWorkspaceFolderForPath(fsPath: string): vscode.WorkspaceFolder | null {
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  return folders.find((folder) => isSameOrDescendant(fsPath, folder.uri.fsPath)) ?? null;
 }
 
 function readSortOrder(context: vscode.ExtensionContext): FileBrowserSortOrder {

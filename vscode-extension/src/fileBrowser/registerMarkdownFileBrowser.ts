@@ -34,6 +34,7 @@ export interface MarkdownFileBrowserController {
 }
 
 interface RegisterMarkdownFileBrowserOptions {
+  openInEditor(uri: vscode.Uri): Promise<void>;
   openInViewer(uri: vscode.Uri): Promise<void>;
   openInNewPanel(uri: vscode.Uri): Promise<void>;
   resolveMarkdownUri(commandArg?: unknown): Promise<vscode.Uri | null>;
@@ -158,8 +159,8 @@ export function registerMarkdownFileBrowser(
     vscode.commands.registerCommand('mdStudioFileBrowser.openInEditor', async (commandArg?: unknown) => {
       const uri = getResourceUri(commandArg) ?? (await pickBrowserFile(provider));
       if (!uri) return;
-      await vscode.commands.executeCommand('vscode.open', uri);
-      await provider.recordRecentFile(uri);
+      await options.openInEditor(uri);
+      void provider.recordRecentFile(uri);
       revealInTree(treeView, uri);
     }),
   );
@@ -228,9 +229,9 @@ export function registerMarkdownFileBrowser(
       if (isMarkdownFileUri(picked)) {
         await options.openInViewer(picked);
       } else {
-        await vscode.commands.executeCommand('vscode.open', picked);
-        await provider.recordRecentFile(picked);
+        await options.openInEditor(picked);
       }
+      void provider.recordRecentFile(picked);
       revealInTree(treeView, picked);
     }),
   );
