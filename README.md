@@ -271,7 +271,12 @@ npm run test:embed-images
 
 이 화면은 VS Code에서 Markdown을 저장했을 때, 확장이 CLI 렌더링 결과를 Webview로 보여주고 Outline/페이지 네비게이션을 제공하는 상태입니다.
 
-### 최근 VS Code Extension 업데이트 (0.1.20 — 2026-06-13)
+### 최근 VS Code Extension 배포 준비 (0.1.30 — 2026-06-20)
+
+- **Marketplace publisher 설정**: `publisher`를 `datanewbie-labs`로 지정하고 GitHub repository/bugs/homepage 링크를 실제 저장소로 정리했습니다.
+- **배포 문서 최신화**: VSIX 설치 예시, 확장 ID, 변경 이력 파일을 현재 배포 버전에 맞췄습니다.
+
+### VS Code Extension 업데이트 (0.1.20 — 2026-06-13)
 
 - **Inline `<small>` 지원**: Markdown 문장 안의 `<small>...</small>`을 caption 스타일로 렌더링하고, 내부의 굵게/코드/링크 같은 인라인 Markdown도 함께 처리합니다.
 - **CLI/VS Code 번들 동기화**: 웹 렌더러와 VS Code 확장 번들 렌더러에 동일한 small 텍스트 처리와 스타일을 반영했습니다.
@@ -356,7 +361,7 @@ npm run package:vsix
 설치:
 
 ```bash
-code --install-extension .\markdown-pattern-studio-preview-0.1.20.vsix
+code --install-extension .\markdown-pattern-studio-preview-0.1.30.vsix
 ```
 
 ### 커서 동기화 동작 (Ctrl+S)
@@ -500,6 +505,13 @@ npm run md2html -- public/examples/design-showcase.md --theme midnight --intent 
 - AI 스킬: `ai_skills/claude/skills/md-presentation-composer/`
 
 ## 변경 이력
+
+### VS Code Extension 0.1.30 — 2026-06-20
+
+- Marketplace publisher를 `datanewbie-labs`로 지정
+- repository/bugs/homepage 링크를 실제 GitHub 저장소로 정리
+- 설치 가이드와 확장 ID 안내를 `datanewbie-labs.markdown-pattern-studio-preview` 기준으로 갱신
+- 최신 VSIX: `vscode-extension/markdown-pattern-studio-preview-0.1.30.vsix`
 
 ### VS Code Extension 0.1.20 — 2026-06-13
 

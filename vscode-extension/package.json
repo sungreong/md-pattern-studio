@@ -2,12 +2,17 @@
   "name": "markdown-pattern-studio-preview",
   "displayName": "Markdown Pattern Studio Preview",
   "description": "Preview Markdown Pattern Studio CLI output in a VS Code webview.",
-  "version": "0.1.29",
-  "publisher": "local",
+  "version": "0.1.30",
+  "publisher": "datanewbie-labs",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/local/markdown-pattern-studio-preview"
+    "url": "https://github.com/sungreong/md-pattern-studio"
   },
+  "bugs": {
+    "url": "https://github.com/sungreong/md-pattern-studio/issues"
+  },
+  "homepage": "https://github.com/sungreong/md-pattern-studio#readme",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -445,6 +450,7 @@
   "files": [
     "dist/**",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE.md",
     "EXTENSION_GUIDE.md",
     "ai_skills/**",
